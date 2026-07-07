@@ -128,9 +128,11 @@ extractEmpiricalProperties <- function() {
 # 
 # findStabilizationTrial <- function(timecourse, minn=10) {
 
-propertyDistributionsByRotation <- function() {
+plotPropertyDistributionsByRotation <- function(properties=NULL) {
   
-  properties <- extractEmpiricalProperties()
+  if (is.null(properties)) {
+    properties <- extractEmpiricalProperties()
+  }
   
   colnames <- c('final_strategy', 'stratdev_onset', 'strat_stable', 'devel_duration', 'predev_sd', 'devel_sd', 'stable_sd')
   
@@ -160,9 +162,11 @@ propertyDistributionsByRotation <- function() {
 
 # bi-modal final strategy fits -----
 
-fitFinalStrategyDistributions <- function() {
+fitFinalStrategyDistributions <- function(properties=NULL) {
   
-  properties <- extractEmpiricalProperties()
+  if (is.null(properties)) {
+    properties <- extractEmpiricalProperties()
+  }
 
   fixed <- data.frame('m'=c(0, NA), 's'=c(NA,NA), 'w'=c(NA,NA))
   
@@ -248,11 +252,14 @@ plotFinalStratModeWeights <- function() {
   
 }
 
-plotFinalStratDistributions <- function() {
+plotFinalStratDistributions <- function(properties=NULL) {
   
+  if (is.null(properties)) {
+    properties <- extractEmpiricalProperties()
+  }
   read.csv('data/final_strategy_multimodal_parameters.csv') -> allpar
   
-  properties <- extractEmpiricalProperties()
+  # properties <- extractEmpiricalProperties()
   colname <- 'final_strategy'
   
   valrange <- c(-10, 70)
@@ -290,7 +297,7 @@ plotFinalStratDistributions <- function() {
 
 # strategy development onset - alpha distribution -----
 
-fitOnsetAlphaDistributions <- function(properties=NULL) {
+fitOnsetGammaDistributions <- function(properties=NULL) {
   
   if (is.null(properties)) {
     properties <- extractEmpiricalProperties()
@@ -300,14 +307,32 @@ fitOnsetAlphaDistributions <- function(properties=NULL) {
   
   valrange <- range(properties[, colname], na.rm=TRUE)
   
+  propvals <- properties[,colname]
+  
+  
+  all_gamma_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "gamma")
+  cat('\nOnset Trial ALL conditions:\n')
+  # print(gamma_fit)
+  
+  normal_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "normal")
+  poisson_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "poisson")
+  
+  cat(sprintf(' gamma AIC: %0.1f\n',stats::AIC(all_gamma_fit, k=2)))
+  cat(sprintf(' normal AIC: %0.1f\n',stats::AIC(normal_fit, k=2)))
+  cat(sprintf(' poisson AIC: %0.1f\n\n',stats::AIC(poisson_fit, k=2)))
+  
+  dgamma <- dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+  gamma_AIC_m <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))
+  cat(sprintf(' mgamma AIC: %0.1f\n',gamma_AIC_m))
+  
   for (rot_idx in c(1,2,3,4,5)) {
     
     rotation <- c(20,30,40,50,60)[rot_idx]
     propvals <- properties[which(properties$rotation == rotation), colname]
 
     gamma_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "gamma")
-    cat(sprintf('onset distr %d deg:\n', rotation))
-    print(gamma_fit)
+    cat(sprintf('\nOnset Trial for %d deg:\n', rotation))
+    # print(gamma_fit)
     
     normal_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "normal")
     # cat('normal:\n')
@@ -315,29 +340,20 @@ fitOnsetAlphaDistributions <- function(properties=NULL) {
 
     poisson_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "poisson")
     
-    cat(sprintf('gamma AIC: %0.1f\n',AIC(gamma_fit)))
-    cat(sprintf('normal AIC: %0.1f\n',AIC(normal_fit)))
-    cat(sprintf('poisson AIC: %0.1f\n',AIC(poisson_fit)))
+    cat(sprintf(' gamma AIC: %0.1f\n',stats::AIC(gamma_fit, k=10)))
+    cat(sprintf(' normal AIC: %0.1f\n',stats::AIC(normal_fit, k=10)))
+    cat(sprintf(' poisson AIC: %0.1f\n',stats::AIC(poisson_fit, k=10)))
+    
+    dgamma <- dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+    gamma_AIC_m <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))
+    cat(sprintf(' all gamma AIC: %0.1f\n',gamma_AIC_m))
     
     
   }
   
-  propvals <- properties[,colname]
-  
+  cat('\n')
 
-  gamma_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "gamma")
-  cat('onset gamma ALL:\n')
-  # print(gamma_fit)
-  
-  normal_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "normal")
-  poisson_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "poisson")
-  
-  cat(sprintf('gamma AIC: %0.1f\n',AIC(gamma_fit)))
-  cat(sprintf('normal AIC: %0.1f\n',AIC(normal_fit)))
-  cat(sprintf('poisson AIC: %0.1f\n',AIC(poisson_fit)))
-  
-  
-  return(gamma_fit)
+  return(all_gamma_fit)
   
 }
 
@@ -387,3 +403,73 @@ plotOnsetGamma <- function(properties=NULL) {
   # dev.off()
   
 }
+
+# strategy development duration -----
+
+checkStratDevDuration <- function(properties=NULL) {
+  
+  if (is.null(properties)) {
+    properties <- extractEmpiricalProperties()
+  }
+  
+  properties[which(!is.na(properties$devel_duration)),] -> properties
+  
+  par(mar=c(5,5,5,5))
+  plot(y = properties$stratdev_onset, 
+       x = properties$devel_duration,
+       xlim=c(0,120), ylim=c(0,120),
+       ylab = 'strategy development onset trial',
+       xlab = 'strategy development duration (trials)',
+       pch=20, col=properties$rotation,
+       asp=1, bty='n', axes=FALSE)
+  lines(x = c(0, 120), y = c(120, 0), col='#999999', lw=1, lty=1)
+  axis(side=1, at=pretty(c(0,120)), labels=pretty(c(0,120)))
+  axis(side=2, at=pretty(c(0,120)), labels=pretty(c(0,120)))
+  legend(90, 120, legend=c(20,30,40,50,60), col=c(1,2,3,4,5), pch=20, bty='n')
+  
+  onset_density <- density(properties$stratdev_onset[which(!is.na(properties$stratdev_onset))], na.rm=TRUE, from=0, to=120, n=241)
+  devdur_density <- density(properties$devel_duration[which(!is.na(properties$devel_duration))], na.rm=TRUE, from=0, to=120, n=241)
+  
+  polygon(y = c(0,onset_density$x,120), 
+          x = c(0,((onset_density$y/max(onset_density$y))*25),0)+125, 
+          col='#00009966', border=NA, xpd=TRUE)
+  polygon(y = c(0,((devdur_density$y/max(devdur_density$y))*15),0)+125, 
+          x = c(0,devdur_density$x, 120), 
+          col='#00009966', border=NA, xpd=TRUE)
+  
+  # is there a correlation with onset?
+  print(sprintf('correlation onset vs duration:'))
+  print(cor.test(properties$stratdev_onset, properties$devel_duration, na.rm=TRUE))
+  
+  # is it bimodal?
+  devdur <- properties$devel_duration[which(!is.na(properties$devel_duration))]
+  fitpar <- Reach::multiModalFit(x=devdur, n=2, points=6, best=4)
+  print(sprintf('strategy development duration bimodal fit:'))
+  print(fitpar)
+  
+  X <- devdur_density$x
+  
+  Reach::multiModalModel(x=X, par=fitpar) -> yvals
+  lines(x=X, y=(18*(yvals/(max(yvals))))+125, col='red',   lw=1, lty=2, xpd=TRUE)
+  
+  gamma_fit <- MASS::fitdistr(devdur, densfun = "gamma")
+  yvals <- dgamma(X, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
+  lines(x=X, y=(18*(yvals/(max(yvals))))+125, col='green', lw=1, lty=2, xpd=TRUE)
+  
+  gamma_d <- dgamma(devdur, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
+  gamma_nll <- Reach::nll(gamma_d)
+
+  norm_d <- (fitpar$w[1] * dnorm(devdur, mean=fitpar$m[1], sd=fitpar$s[1])) + (fitpar$w[2] * dnorm(devdur, mean=fitpar$m[2], sd=fitpar$s[2]))
+  norm_nll <- Reach::nll(norm_d)
+  
+  # print(log(gamma_d))
+  # print(log(norm_d))
+  print(sprintf('gamma NLL: %0.2f', gamma_nll))
+  print(sprintf('bimodal NLL: %0.2f', norm_nll))
+  
+  logLik <- c('gamma'=gamma_nll, 'bimodal'=norm_nll) * -1
+  print(Reach::AIC(logLik=logLik, k=c(2,5), N=length(devdur)))  
+}
+
+
+
