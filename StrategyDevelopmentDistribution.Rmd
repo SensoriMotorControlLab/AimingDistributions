@@ -1,0 +1,163 @@
+---
+title: "Distribution"
+author: "Marius 't Hart"
+date: "2026-07-06"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Strategy Development Distribution
+
+We have done 2 analyses testing how strategy development might be split into discrete styles of cognitive learning. Neither showed clear clusters in the data, leading us to conclude that there is a continuum of strategy development styles. That continuum might be better described as a distribution. That is what we look at here.
+
+```{r requirement}
+# Install Reach if not already installed.
+if (!require(Reach)) {
+  if (!require(remotes)) {
+    install.packages(remotes)
+  }
+  remotes::install_github('thartbm/Reach', ref='main', force=TRUE)
+} else {
+  # check if the version of Reach if 2026.07.07 or higher:
+  if (packageVersion("Reach") < "2026.07.07") {
+    if (!require(remotes)) {
+      install.packages(remotes)
+    }
+    remotes::install_github('thartbm/Reach', ref='main', force=TRUE)
+  }
+}
+library(Reach)
+
+# load source scripts:
+
+# downloading the data from OSF:
+source("R/data.R")
+
+# test all the properties that might describe a distribution of strategy development styles:
+source("R/properties.R")
+
+```
+
+# Properties of the distribution of strategy development styles
+
+A previous attempt at describing such distributions only considered stepwise strategy development (D'Amario et al., 2024; poster at NCM Panama, 2025). However, especially for laregr rotations, many participants have an exploratory strategy development style. Therefore, we will consider a wider range of properties that might describe the distribution of strategy development styles.
+
+For a stepwise distribution, we need:
+
+1. size of the step (bi-modal)
+2. trial the step occurs
+3. --
+4. sd before the step
+5. --
+6. sd after the step
+
+For both exploratory (and gradual) strategy development, we need:
+
+1. size of final strategy (bi-modal, same as size of step above)
+2. trial at which strategy development starts
+3. duration of strategy development (in trials)
+4. sd before strategy development starts
+5. sd during strategy development
+6. sd after strategy stabilizes (maybe two: one for people in each of the modes of the bi-modal strategy size distribution)
+
+So that makes 2 extra parameters (or more likely distributions with multiple parameters). There will be cost in those extra parameters, but we can build both models and test whether or not the extra two distributions pay of sufficiently in additional goodness of fit.
+
+# Data-based properties
+
+We can use the data to estimate the properties of the distribution of strategy development styles. First we extract them for all participants.
+
+```{r extract_parameters}
+properties <- extractEmpiricalProperties()
+head(properties)
+```
+
+Just using density functions, this looks like this:
+
+```{r property_density_plot, fig.width=7, fig.height=10}
+plotPropertyDistributionsByRotation(properties)
+```
+
+Looks like at least some of these properties have a clear distribution, and can be used to inform a distribution model. We'll now need to look at each of them in more detail.
+
+# Final strategy
+
+We estimate this bi-modal strategy size using a Gaussian mixture model with 5 parameters (estimated as 6):
+- mu 1: mean of the first mode
+- mu 2: mean of the second mode
+- sigma 1: standard deviation of the first mode
+- sigma 2: standard deviation of the second mode
+- pi: proportion of the first mode (the second mode is 1-pi)
+
+We notice that the mean of the first mode should be around 0, so we fix it at that value. We've also already seen that the the mean of the strategy learned in each rotation group is roughly half the size of the rotation, so for now we also fix that at 0.5 * rotation. What get's fitted is the standard deviations of the two modes and their weights (pi and 1-pi).
+
+We should develop a super-fit that fits the mean and sigma of the first mode as a constant across rotation sizes and the multiplication factor for the second mode as a constant across rotation sizes. This would also require fitting the relationship between the rotation size and the standard deviation of the second mode, as well as the function of the value of pi depending on rotation size. This seems do-able but we'll leave that for a bit.
+
+First we see if the bi-modal approach matches the data set.
+
+```{r fit_final_strat_size}
+fitFinalStrategyDistributions(properties) # fits stored in a file
+```
+Now we want to see the fits on top of the data:
+
+```{r final_strat_distr, fig.width=7, fig.height=10}
+plotFinalStratDistributions(properties)
+```
+
+This works relatively well. Even if we don't believe there are discrete strategy development styles, the bi-modal distribution of final strategy sizes should be replicating the strategy-users vs. non-strategy users from that approach. Here we plot the values of weights (pi and pi-1) of the modes as a stacked bargraph over rotation size.
+
+```{r mode_weight, fig.width=7, fig.height=5}
+plotFinalStratModeWeights()
+```
+
+This indeed looks familiar, and we should be able to do some kind of chi-squared based probability comparison showing equality.
+
+# Strategy Development Onset Trial
+
+This distribution could be a Poisson distribution, but in D'Amario et al's data we found it to better fitted as a gamma distribution (makes less sense). We will compare both fits, as well as the fit of a normal distribution. We'll do this for each rotation size separately. But we start with calculating it for all data combined. 
+
+It could be that a simple fit across all data at once is sufficient here. The combined model is 1 single distribution, which would result in 2 parameters. If we fit separate distributions for each of the rotation sizes, that means 5 x 2 = 10 parameters, increasing the penalties for those fits.
+
+```{r devel_onset_fits}
+fitOnsetGammaDistributions(properties)
+```
+
+Interestingly, the normal distribution fits better (sometimes much better) than the Poisson distribution, but no matter: the gamma distribution fits even better and this matches the previous findings. The overall fit also fits better in all cases, so it's probably best to use that.
+
+Let's plot the fits, both the fits for each rotation size, and the combined gamma distribution:
+
+```{r onset_gamma_plot, fig.width=7, fig.height=7}
+plotOnsetGamma(properties)
+```
+
+The colored dotted lines indicate the density across participants for each rotation separately, in the same colors we see dots for individual participants, and a thin continuous line indicating the separate gamma fits.
+
+The dashed purple line indicates the combined fit, which is indeed a good fit for all rotation sizes. The gamma distribution is a 2-parameter distribution, and we can use the same distribution for all rotation sizes.
+
+# Strategy Development Duration
+
+We could model the strategy stabilization trial as a distribution, but it seems cleaner to model the duration of strategy development as a distribution. As long as we ensure that the duration is always a positive number, the stabilization trial will never happen before the onset trial (this is a little harder when modelling the stabilization trial separately from development onset). The structure of the experiment could have lead to a negative correlation between development onset and development duration. Since there is less and less time to develop a strategy the later the development of the strategy starts. We plot that, and test for a correlation. We also look at the distribution of all strategy development durations, and fit several distributions to that.
+
+```{r plot_strat_dev_dur, fig.width=7, fig.height=7}
+checkStratDevDuration(properties)
+```
+
+First, there is no correlation between the onset trial and the duration of strategy development.
+
+The distribution of strategy development durations (blue area on top) is also not a simple gamma distribution (green line), but a mixture of two distributions (red line). This indeed fits slightly, albeit not significantly (delta AIC=0.3), better than a gamma distribution, even when the gamma distribution has only 2 parameters, whereas the effective number of parameters of the mixture model is 5.
+
+Just to stay somewhat more true to the data, we go with the bi-modal distribution for now, even when this requires special care to make sure we do not draw negative durations from the distribution.
+
+# Standard Deviations
+
+At this point only the standard deviations of the three phases of strategy development remain. We will look at the standard deviations before, during and after strategy development.
+
+The standard deviation _before_ strategy development is a measure of how much participants explore the space before they start developing a strategy, or when they never explore a strategy. This means that simulated participants in the first mode of the final strategy (with a mean of 0 strategy) will display this level of noise throughout the 120 trials of the task.
+
+The standard deviation _during_ strategy development is a measure of how much participants explore the space while they are developing a strategy. Here we might see effects of _exploratory_ (high SD) and _gradual_ (very low SD) strategy development.
+
+The standard deviation after strategy development is a measure of how consistent participants can report a strategy once it has stabilized. There might be an effect of rotation size in the last level of noise, as aiming closer to the target there is information provided by the target, and this help less for larger rotations.
