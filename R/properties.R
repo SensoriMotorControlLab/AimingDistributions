@@ -513,6 +513,11 @@ plotSDbyRotation <- function(properties=NULL) {
   
   layout(mat=matrix(c(1,2,3),nrow=1,byrow=TRUE))
   
+  phase = c()
+  rotation = c()
+  shape = c()
+  rate = c()
+  
   sd_vars <- c('predev_sd','devel_sd','stable_sd')
   for (col_idx in c(1:length(sd_vars))) {
     colname <- sd_vars[col_idx]
@@ -528,12 +533,16 @@ plotSDbyRotation <- function(properties=NULL) {
     propvals <- properties[, colname]
     propvals <- propvals[which(!is.na(propvals))]
     all_gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
-    print(all_gamma_fit)
+    print(all_gamma_fit$estimate)
     
+    phase <- c(phase, colname)
+    rotation <- c(rotation, 200)
+    shape <- c(shape, all_gamma_fit$estimate['shape'])
+    rate <- c(rate, all_gamma_fit$estimate['rate'])
 
     for (rot_idx in c(1,2,3,4,5)) {
-      rotation <- c(20,30,40,50,60)[rot_idx]
-      propvals <- properties[which(properties$rotation == rotation), colname]
+      rot <- c(20,30,40,50,60)[rot_idx]
+      propvals <- properties[which(properties$rotation == rot), colname]
       propvals <- propvals[which(propvals > -10)] # remove negative outliers
       
       pvd <- density(propvals, na.rm=TRUE, bw=1.6,
@@ -546,11 +555,16 @@ plotSDbyRotation <- function(properties=NULL) {
       normal_fit <- MASS::fitdistr(propvals, densfun = "normal")
       # poisson_fit <- MASS::fitdistr(propvals, densfun = "poisson")
       
+      phase <- c(phase, colname)
+      rotation <- c(rotation, rot)
+      shape <- c(shape, gamma_fit$estimate['shape'])
+      rate <- c(rate, gamma_fit$estimate['rate'])
+      
       dgamma <- dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
       all_gamma_AIC <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))[1]
       # print(all_gamma_AIC)
       
-      cat(sprintf('%s, %d -- gamma AIC: %0.1f,  normal AIC: %0.1f\n', colname, rotation,stats::AIC(gamma_fit, k=10),stats::AIC(normal_fit, k=10)))
+      cat(sprintf('%s, %d -- gamma AIC: %0.1f,  normal AIC: %0.1f\n', colname, rot ,stats::AIC(gamma_fit, k=10),stats::AIC(normal_fit, k=10)))
       cat(sprintf("all gamma AIC: %0.1f\n", all_gamma_AIC))
 
     }
@@ -558,6 +572,33 @@ plotSDbyRotation <- function(properties=NULL) {
     axis(side=1,at=pretty(valrange))
     axis(side=2,at=c(1,2,3,4,5),labels=c(20,30,40,50,60))
   
+  }
+  
+  gamma_fit_par <- data.frame(phase, rotation, shape, rate)
+  
+  write.csv(gamma_fit_par, 'data/SD_gamma_par.csv', row.names = FALSE)
+  
+  # return(gamma_fit_par)
+  
+}
+
+
+plotSDfitPars <- function() {
+  
+  df <- read.csv('data/SD_gamma_par.csv', stringsAsFactors = FALSE)
+  
+  layout(mat=matrix(c(1:6),ncol=2,byrow=TRUE))
+  
+  for (phase in unique(df$phase)) {
+    
+    for (gamma_par in c('shape','rate')) {
+      
+      subdf <- df[which(df$phase == phase & df$rotation < 200),]
+      
+      plot(x=subdf$rotation, y=subdf[,gamma_par],
+           xlim=c(0,65),ylim=c(0,max(subdf[,gamma_par])*1.05))
+      
+    }
   }
   
 }
