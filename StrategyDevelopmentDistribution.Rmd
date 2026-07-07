@@ -57,7 +57,7 @@ source("R/properties.R")
 
 # make sure we have the data:
 
-getData()
+# getData()
 
 ```
 
@@ -178,4 +178,25 @@ The standard deviation _before_ strategy development is a measure of how much pa
 
 The standard deviation _during_ strategy development is a measure of how much participants explore the space while they are developing a strategy. Here we might see effects of _exploratory_ (high SD) and _gradual_ (very low SD) strategy development.
 
-The standard deviation after strategy development is a measure of how consistent participants can report a strategy once it has stabilized. There might be an effect of rotation size in the last level of noise, as aiming closer to the target there is information provided by the target, and this help less for larger rotations.
+The standard deviation after strategy development is a measure of how consistent participants can report a strategy once it has stabilized. There might be an effect of rotation size in the last level of noise, as aiming closer to the target, may be anchored by the target location (and perhaps its size), and this may help less for larger rotations. Alternatively, only people with low tolerance for errors (very precise people) develop a strategy in lower rotation, and people with more variable response also develop strategies at larger rotations.
+
+```{r sd_pairs, fig.width=6, fig.height=6}
+pairs(properties[which(properties$stable_sd < 40),c('predev_sd','devel_sd','stable_sd')], pch=21, col = c("orange","red", "purple", "blue", "turquoise")[(properties$rotation/10)-1])
+```
+There do not appear to be any clear patterns, but we'll look a little deeper. First, we test if any of the standard deviations are correlated:
+
+```{r}
+correlateSDs(properties)
+```
+Unexpectedly, there is a fairly strong correlation between the pre-development SD and development SD, and also a moderate correlation between the development SD and the stable SD. Despite this, there is no correlation between pre-development SD and stable SD.
+
+We might have to take this into account. And we should also test for further relationships between descriptive variables here.
+
+It looks like they are all gamma distributed, but let's plot and test this now:
+
+```{r inspect_sd_dist, fig.width=8, fig.height=8}
+plotSDbyRotation(properties)
+```
+For all subsets of data, the gamma distribution fits better (d AIC > 2) than the normal distribution, except for the 20 degree condition pre-development SD. However the AIC is still lower for the gamma distribution in that case, so we will go with the gamma distribution throughout. Poisson distributions don't work for this data.
+
+A single gamma distribution could also fit better than 5 separate ones, but there does seem to be a relationship between rotation and standard deviation in all 3 variables.
