@@ -471,5 +471,93 @@ checkStratDevDuration <- function(properties=NULL) {
   print(Reach::AIC(logLik=logLik, k=c(2,5), N=length(devdur)))  
 }
 
+# standard deviations -----
 
+correlateSDs <- function(properties=NULL) {
+  
+  if (is.null(properties)) {
+    properties <- extractEmpiricalProperties()
+  }
+  
+  # one of them is too high:
+  properties <- properties[which(properties$stable_sd < 40),]
+  
+  sd_vars <- c('predev_sd','devel_sd','stable_sd')
+  # cat('outer loop:\n')
+  # print(c(1,length(sd_vars)-1))
+  for (first in c(1,length(sd_vars)-1)) {
+    # cat('  inner loop:\n  ')
+    # print(unique(c(first+1,length(sd_vars))))
+    for (second in unique(c(first+1,length(sd_vars)))) {
+      
+      cat(sprintf('%s ~ %s:\n', sd_vars[second], sd_vars[first]))
+      x = properties[,sd_vars[first]]
+      y = properties[,sd_vars[second]]
+      print(cor.test(x, y))
+      
+    }
+  }
+  # cat('done\n')
+  # return()
+  
+}
 
+plotSDbyRotation <- function(properties=NULL) {
+  
+  if (is.null(properties)) {
+    properties <- extractEmpiricalProperties()
+  }
+  
+  # one of them is too high:
+  properties <- properties[which(properties$stable_sd < 40),]
+  
+  layout(mat=matrix(c(1,2,3),nrow=1,byrow=TRUE))
+  
+  sd_vars <- c('predev_sd','devel_sd','stable_sd')
+  for (col_idx in c(1:length(sd_vars))) {
+    colname <- sd_vars[col_idx]
+    valrange <- c(0, c(90,60,15)[col_idx])
+    
+    #  valrange <- c(-10, 70)
+    plot(NA, 
+         xlim=valrange, ylim=c(0.5,5.5),
+         xlab=colname, ylab='density by rotation size', 
+         main='',axes=FALSE,bty='n')
+    X <- seq(valrange[1], valrange[2], length.out=321)
+    
+    propvals <- properties[, colname]
+    propvals <- propvals[which(!is.na(propvals))]
+    all_gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
+    print(all_gamma_fit)
+    
+
+    for (rot_idx in c(1,2,3,4,5)) {
+      rotation <- c(20,30,40,50,60)[rot_idx]
+      propvals <- properties[which(properties$rotation == rotation), colname]
+      propvals <- propvals[which(propvals > -10)] # remove negative outliers
+      
+      pvd <- density(propvals, na.rm=TRUE, bw=1.6,
+                     n = length(X), from=min(X), to=max(X))
+      lines(pvd$x, 0.8*(pvd$y/(max(pvd$y)))+rot_idx-0.4, col=rot_idx, lw=1, lty=1)
+      points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
+      
+      propvals <- propvals[which(!is.na(propvals))]
+      gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
+      normal_fit <- MASS::fitdistr(propvals, densfun = "normal")
+      # poisson_fit <- MASS::fitdistr(propvals, densfun = "poisson")
+      
+      dgamma <- dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+      all_gamma_AIC <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))[1]
+      # print(all_gamma_AIC)
+      
+      cat(sprintf('%s, %d -- gamma AIC: %0.1f,  normal AIC: %0.1f\n', colname, rotation,stats::AIC(gamma_fit, k=10),stats::AIC(normal_fit, k=10)))
+      cat(sprintf("all gamma AIC: %0.1f\n", all_gamma_AIC))
+
+    }
+    
+    axis(side=1,at=pretty(valrange))
+    axis(side=2,at=c(1,2,3,4,5),labels=c(20,30,40,50,60))
+  
+  }
+  
+}
