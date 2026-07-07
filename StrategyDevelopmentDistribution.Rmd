@@ -16,7 +16,13 @@ knitr::opts_chunk$set(echo = TRUE)
 We have done 2 analyses testing how strategy development might be split into discrete styles of cognitive learning. Neither showed clear clusters in the data, leading us to conclude that there is a continuum of strategy development styles. That continuum might be better described as a distribution. That is what we look at here.
 
 ```{r requirement}
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # #
+
+
 # Install Reach if not already installed.
+# (Marius' package with a bunch of convenience functions.)
 if (!require(Reach)) {
   if (!require(remotes)) {
     install.packages(remotes)
@@ -33,6 +39,10 @@ if (!require(Reach)) {
 }
 library(Reach)
 
+
+# # # # # # # # # # # # # # # # # # # # # # # # #
+
+
 # load source scripts:
 
 # downloading the data from OSF:
@@ -40,6 +50,14 @@ source("R/data.R")
 
 # test all the properties that might describe a distribution of strategy development styles:
 source("R/properties.R")
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # #
+
+
+# make sure we have the data:
+
+getData()
 
 ```
 
