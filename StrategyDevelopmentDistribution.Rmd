@@ -11,9 +11,13 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Strategy Development Distribution
+# Introduction
 
 We have done 2 analyses testing how strategy development might be split into discrete styles of cognitive learning. Neither showed clear clusters in the data, leading us to conclude that there is a continuum of strategy development styles. That continuum might be better described as a distribution. That is what we look at here.
+
+# Requirements
+
+First we need to set up the R environment: get the Reach package with helper functions, download the data, and source the code with project-specific functions:
 
 ```{r requirement}
 
@@ -61,7 +65,9 @@ source("R/properties.R")
 
 ```
 
-# Properties of the distribution of strategy development styles
+
+
+## Properties of the distribution of strategy development styles
 
 A previous attempt at describing such distributions only considered stepwise strategy development (D'Amario et al., 2024; poster at NCM Panama, 2025). However, especially for laregr rotations, many participants have an exploratory strategy development style. Therefore, we will consider a wider range of properties that might describe the distribution of strategy development styles.
 
@@ -85,7 +91,7 @@ For both exploratory (and gradual) strategy development, we need:
 
 So that makes 2 extra parameters (or more likely distributions with multiple parameters). There will be cost in those extra parameters, but we can build both models and test whether or not the extra two distributions pay of sufficiently in additional goodness of fit.
 
-# Data-based properties
+## Data-based properties
 
 We can use the data to estimate the properties of the distribution of strategy development styles. First we extract them for all participants.
 
@@ -94,15 +100,21 @@ properties <- getProperties()
 head(properties)
 ```
 
+### All properties
+
 Just using density functions, this looks like this:
 
-```{r property_density_plot, fig.width=7, fig.height=10}
+```{r property_density_plot, fig.width=9, fig.height=10}
 plotPropertyDistributionsByRotation(properties)
 ```
 
 Looks like at least some of these properties have a clear distribution, and can be used to inform a distribution model. We'll now need to look at each of them in more detail.
 
-# Final strategy
+### Expanded Model
+
+Here we inspect the Expanded Model Properties
+
+#### Final Strategy
 
 We estimate this bi-modal strategy size using a Gaussian mixture model with 5 parameters (estimated as 6):
 - mu 1: mean of the first mode
@@ -132,9 +144,9 @@ This works relatively well. Even if we don't believe there are discrete strategy
 plotFinalStratModeWeights()
 ```
 
-This indeed looks familiar, and we should be able to do some kind of chi-squared based probability comparison showing equality.
+This indeed looks familiar, and we should be able to do some kind of chi-squared based probability comparison showing equality between this set of probabilities and the ones we got from the DTW- and feature-based approaches.
 
-# Strategy Development Onset Trial
+#### Strategy Development Onset Trial
 
 This distribution could be a Poisson distribution, but in D'Amario et al's data we found it to better fitted as a gamma distribution (makes less sense). We will compare both fits, as well as the fit of a normal distribution. We'll do this for each rotation size separately. But we start with calculating it for all data combined. 
 
@@ -156,7 +168,7 @@ The colored dotted lines indicate the density across participants for each rotat
 
 The dashed purple line indicates the combined fit, which is indeed a good fit for all rotation sizes. The gamma distribution is a 2-parameter distribution, and we can use the same distribution for all rotation sizes.
 
-# Strategy Development Duration
+#### Strategy Development Duration
 
 We could model the strategy stabilization trial as a distribution, but it seems cleaner to model the duration of strategy development as a distribution. As long as we ensure that the duration is always a positive number, the stabilization trial will never happen before the onset trial (this is a little harder when modelling the stabilization trial separately from development onset). The structure of the experiment could have lead to a negative correlation between development onset and development duration. Since there is less and less time to develop a strategy the later the development of the strategy starts. We plot that, and test for a correlation. We also look at the distribution of all strategy development durations, and fit several distributions to that.
 
@@ -168,9 +180,9 @@ First, there is no correlation between the onset trial and the duration of strat
 
 The distribution of strategy development durations (blue area on top) is also not a simple gamma distribution (green line), but a mixture of two distributions (red line). This indeed fits slightly, albeit not significantly (delta AIC=0.3), better than a gamma distribution, even when the gamma distribution has only 2 parameters, whereas the effective number of parameters of the mixture model is 5.
 
-Just to stay somewhat more true to the data, we go with the bi-modal distribution for now, even when this requires special care to make sure we do not draw negative durations from the distribution.
+Just to stay somewhat more true to the data, we go with the bi-modal distribution for now, even when this requires special care to make sure we do not draw negative durations from the distribution. So there is a subset of people with a strategy that take about 20 trials to develop it, and another subset who take almost 80 trials to develop their strategy.
 
-# Standard Deviations
+#### Standard Deviations
 
 At this point only the standard deviations of the three phases of strategy development remain. We will look at the standard deviations before, during and after strategy development.
 
@@ -202,6 +214,13 @@ For all subsets of data, the gamma distribution fits better (d AIC > 2) than the
 
 A single gamma distribution could also fit better than 5 separate ones, but there does seem to be a relationship between rotation and standard deviation in all 3 variables.
 
+For 40, 50, and 60 degrees the `predev_sd` is better fitted by an overall gamma distribution. It's close enough for the 20 and 30 degree conditions, though technically less good. This seems to be a worthwhile simplification so we will go with the single gamma distribution.
+
+For `devel_sd` the overall gamma fit is better in all conditions, so this will also be a single distribution, not dependent on rotation size. 
+
+The same goes for `stable_sd`.
+
+
 Here we take a look at this:
 
 ```{r sd_fit_pars_rotation, fig.width=7, fig.height=7}
@@ -212,18 +231,28 @@ It seems that it is possible there some relationship between rotation size and t
 
 Nevertheless, for now, we will keep it simple and fit a single gamma distribution to each of the 3 standard deviations and not worry about correlations. We can always explore if taking these nuances into account substantially improves the model. The goal is first to see if strategy development ramps with potentially increased (exploratory styles) or decreased (incremental styles) standard deviations works better than a step function approach that does not allow for this nuance. If it does, we can always refine the distribution model a bit, but that's not the point.
 
-# Stepwise components
+### Stepwise components
 
-## Step-time and Step-size
+#### Step-time and Step-size
 
 First we look at the distributions of step-time and step-size. We can fit a gamma distribution to both of these, and see if there is a relationship between rotation size and the parameters of the gamma distribution. Although it would be better to ignore them if the relationship is not too strong.
 
+```{r steptime_size, fig.width=8, fig.height=8}
+plotStepPars(properties)
+```
+
+In this case, we will pick gamma distributions in all cases, with one single distribution for step time, and 5 separate ones for step size. We use the percentage of people with a step largerthan 5 degrees as the percentage of people who develop a strategy (and make step) at all.
+
+The step-time parameter largely mimics the strategy development onset parameter, perhaps to be expected, but this already shows that perhaps the stepwise distribution is all that's necessary.
+
+#### Pre- and post-step standard deviations
+
+Now we just need to look at the standard deviations of pre- and post-step intervals. As well as the standard deviations of people without any strategy. Just looking at the initial figure with distributions for all properties, it seems that the `poststep_sd` is very similar to `stable_sd` and `prestep_sd` looks highly similar to `predev_sd` and `devel_sd`. This might also hint at the value of the simpler model, but we will see how this goes.
 
 
-## Pre- and post-step standard deviations
 
 
-
+# Model building
 
 Now we have all the ingredients to start building the two models.
 
