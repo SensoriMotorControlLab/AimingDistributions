@@ -108,24 +108,26 @@ extractEmpiricalProperties <- function() {
       }
       
       # only get steps for the people with a final strategy larger than 5 deg?
-      if (!is.na(onset)) {
-        
-        # ARtimecourse[which(ARtimecourse > rot+10)] <- NA
-        
-        step_df <- data.frame('trial'=c(1:length(ARtimecourse)), 'deviation'=ARtimecourse)
-        step_par <- stepFit(data=step_df, gridpoints=6, gridfits=4)
-        # print(step_par)
+      # no, let's have it depend on stepsize... should strongly correlate though
+
+      step_df <- data.frame('trial'=c(1:length(ARtimecourse)), 'deviation'=ARtimecourse)
+      step_par <- stepFit(data=step_df, gridpoints=6, gridfits=4)
+      # print(step_par)
+      
+      if (step_par['s']>=5) {
+      
         step_time <- c(step_time, step_par['t'])
         step_size <- c(step_size, step_par['s']) 
         
         # use max, so that we do not have an index lower than 0, and min to ensure no more than 8 trials are used?
-        prestep_sd  <- c(prestep_sd, sd(ARtimecourse[1:max(min(8,floor(step_par['t'])),1)]))
+        prestep_sd  <- c(prestep_sd, sd(ARtimecourse[1:min(8,max(1, floor(step_par['t'])))]))
+        
         # use min, so that we do not have an index higher than the length of the timecourse
         # print( min((length(ARtimecourse)-1),max(1,ceiling(step_par['t']))) )
         poststep_sd <- c(poststep_sd, sd(ARtimecourse[min((length(ARtimecourse)-1),max(1,ceiling(step_par['t']))) :  length(ARtimecourse)]))
       } else {
         step_time <- c(step_time, NA)
-        step_size <- c(step_size, mean(ARtimecourse[1:8]))
+        step_size <- c(step_size, NA)
         prestep_sd  <- c(prestep_sd, sd(ARtimecourse[1:8]))
         poststep_sd <- c(poststep_sd, NA)
       }
@@ -150,7 +152,7 @@ extractEmpiricalProperties <- function() {
                         poststep_sd    = poststep_sd    
   )
   
-  write.csv(prop_df, file='data/empirical_properties.csv', row.names=FALSE)
+  write.csv(prop_df, file='data/empirical_properties.csv', row.names=FALSE, quote=TRUE)
   
 }
 
@@ -180,10 +182,11 @@ plotPropertyDistributionsByRotation <- function(properties=NULL) {
     properties <- extractEmpiricalProperties()
   }
   
-  colnames <- c('final_strategy', 'stratdev_onset', 'strat_stable', 'devel_duration', 'predev_sd', 'devel_sd', 'stable_sd')
+  colnames <- c('final_strategy', 'stratdev_onset', 'strat_stable', 'devel_duration', 'predev_sd', 'devel_sd', 'stable_sd', 'step_time', 'step_size', 'prestep_sd', 'poststep_sd')
   
   par(mar=c(4,3,.2,.2))
-  layout(matrix(1:(2*(ceiling(length(colnames)/2))), nrow=ceiling(length(colnames)/2), ncol=2, byrow=TRUE))
+  ncols <- 3
+  layout(matrix(1:(ncols*(ceiling(length(colnames)/ncols))), nrow=ceiling(length(colnames)/ncols), ncol=ncols, byrow=TRUE))
   
   for (colname in colnames) {
     valrange <- range(properties[, colname], na.rm=TRUE)
@@ -250,9 +253,13 @@ stepFit <- function(data, gridpoints=9, gridfits=5) {
   # set the search grid:
   parvals <- seq(1/gridpoints/2,1-(1/gridpoints/2),1/gridpoints)
   
-  stepsizes <- (parvals * diff(range(data$deviation, na.rm=TRUE))) - min(data$deviation, na.rm=TRUE)
+  # stepsizerange <- diff(range(data$deviation, na.rm=TRUE)))
+  stepsizerange <- c(-10, 70)
+  stepsizes <- parvals * (diff(stepsizerange) - min(stepsizerange))
   
-  steptimes <- parvals * max(data$trial, na.rm=TRUE)
+  # steptimemax <- max(data$trial, na.rm=TRUE)
+  steptimemax <- 100
+  steptimes <- parvals * steptimemax
   
   searchgrid <- expand.grid('t' = steptimes,
                             's' = stepsizes)
@@ -262,8 +269,8 @@ stepFit <- function(data, gridpoints=9, gridfits=5) {
   
   # print(data$deviation)
   
-  lo <- c(0,min(data$deviation, na.rm=TRUE))
-  hi <- c(max(data$trial, na.rm=TRUE), max(data$deviation, na.rm=TRUE))
+  # lo <- c(0,min(data$deviation, na.rm=TRUE))
+  # hi <- c(max(data$trial, na.rm=TRUE), max(data$deviation, na.rm=TRUE))
   
   
   lo <- c(1, -10)
@@ -280,9 +287,12 @@ stepFit <- function(data, gridpoints=9, gridfits=5) {
                             MARGIN=c(1),
                             FUN=optimx::optimx,
                             fn=stepMSE,
-                            # method     = 'L-BFGS-B',
-                            # lower      = lo,
-                            # upper      = hi,
+                            
+                            # do we use the bounded approach?
+                            method     = 'L-BFGS-B',
+                            lower      = lo,
+                            upper      = hi,
+                            
                             data       = data) )
   
   # pick the best fit:
@@ -300,8 +310,11 @@ stepFit <- function(data, gridpoints=9, gridfits=5) {
 plotStepPars <- function(properties=NULL) {
   
   if (is.null(properties)) {
-    properties <- extractEmpiricalProperties()
+    properties <- getProperties()
   }
+  
+  cat('percentage of people who do not have a strategy:\n(FALSE == strategy, TRUE == no strategy)\n')
+  print(table(properties$rotation, is.na(properties$step_time)))
   
   par(mfrow=c(1,2))
   
@@ -315,23 +328,27 @@ plotStepPars <- function(properties=NULL) {
   propvals <- round(properties[which( properties$step_size > 5 & 
                                         properties$step_time >= 0 ), 'step_time'])
   all_gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
+  
+  cat('overall gamma distribution for step time:\n')
   print(all_gamma_fit)
   
   # all_poisson_fit <- MASS::fitdistr(propvals, densfun = "poisson")
   # print(all_poisson_fit)
   
   
-  X <- seq(1, 120, length.out=120)
+  X <- seq(.25, 120, length.out=480)
   gY <- dgamma(X, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
   # pY <- dpois(X, lambda=all_poisson_fit$estimate['lambda'])
   # print(pY)
   
   for (rot_idx in c(1,2,3,4,5)) {
     rotation <- c(20,30,40,50,60)[rot_idx]
-    propvals <- properties[which(properties$rotation == rotation & 
-                                   properties$step_size > 5 & 
-                                   properties$step_time >= 0 & 
-                                   properties$step_time < 100), 'step_time']
+    propvals <- properties[which(properties$rotation == rotation
+                                   & properties$step_size > 5
+                                   # & properties$step_time >= 0 
+                                   # & properties$step_time < 100
+                                   & !is.na(properties$step_time)
+                                 ), 'step_time']
     
     pvd <- density(propvals, na.rm=TRUE, bw=1.6,
                    n = 241, from=0, to=120)
@@ -340,13 +357,19 @@ plotStepPars <- function(properties=NULL) {
     points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
     
     # print(propvals)
-    gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", start=list(shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate']))
+    # gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", start=list(shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate']))
+    gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
     Y <- dgamma(X, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
     # print(Y)
     lines(X, (Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
     
     lines(X, (gY/max(gY))+rot_idx-0.5, col='purple', lw=1, lty=2)
     # lines(X, (pY/max(pY))+rot_idx-0.5, col='orange', lw=1, lty=2)
+    
+    norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
+    Y <- dnorm(X, mean=norm_fit$estimate['mean'], sd=norm_fit$estimate['sd'])
+    lines(X, (Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
+    # print(norm_fit)
     
     
   }
@@ -360,26 +383,28 @@ plotStepPars <- function(properties=NULL) {
        xlim=c(-10, 70), ylim=c(0.5,5.5),
        bty='n', axes=FALSE)
   
-  X <- seq(-10, 70, length.out=161)
+  X <- seq(.25, 70, length.out=280)
   
   for (rot_idx in c(1,2,3,4,5)) {
     rotation <- c(20,30,40,50,60)[rot_idx]
-    propvals <- properties[which(properties$rotation == rotation &
-                                   # properties$step_time < 100 &
-                                   !is.na(properties$stratdev_onset)), 'step_size']
+    propvals <- properties[which(properties$rotation == rotation 
+                                   & !is.na(properties$step_size)
+                                   # & properties$step_time < 100
+                                   # & !is.na(properties$stratdev_onset)
+                                 ), 'step_size']
     
-    print(propvals)
+    # print(propvals)
     
     pvd <- density(propvals, na.rm=TRUE, bw=1.6,
                    n = 161, from=-10, to=70)
-    
+
     lines(pvd$x, (pvd$y/max(pvd$y))+rot_idx-0.5, col=rot_idx)
     points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
     
-    # # print(propvals)
-    gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", start=list(shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate']))
+    # print(propvals)
+    # gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", start=list(shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate']))
+    gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
     rgY <- dgamma(X, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
-    # # print(Y)
     lines(X, (rgY/max(rgY))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
     
     norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
@@ -389,8 +414,10 @@ plotStepPars <- function(properties=NULL) {
     # lines(X, (gY/max(gY))+rot_idx-0.5, col='purple', lw=1, lty=2)
     # # lines(X, (pY/max(pY))+rot_idx-0.5, col='orange', lw=1, lty=2)
     
-    print(c('gamma'=stats::AIC(gamma_fit, k=2), 'normal'=stats::AIC(norm_fit, k=2)))
+    # print(c('gamma'=stats::AIC(gamma_fit, k=2), 'normal'=stats::AIC(norm_fit, k=2)))
     
+    cat(sprintf('step-size gamma distribution for %d rotation:\n',rotation))
+    print(gamma_fit)
     
     
     
@@ -401,13 +428,50 @@ plotStepPars <- function(properties=NULL) {
   
 }
 
+plotStepSD <- function(properties=NULL) {
+  
+  if (is.null(properties)) {
+    properties <- getProperties()
+  }
+  
+  par(mfrow=c(1,3))
+  
+  steptrue <- c(FALSE,        TRUE,         TRUE         )
+  depvar   <- c('prestep_sd', 'prestep_sd', 'poststep_sd')
+  
+  for (situation in c(1,2,3)) {
+    if (steptrue[situation]) {
+      sitprop <- propertiesp[which(!is.na(properties$step_time)),]
+    } else {
+      sitprop <- propertiesp[which(is.na(properties$step_time)),]
+    }
+      
+    plot(y = NULL, x = NULL,
+         ylab = 'SD (by rotation size)',
+         xlab = 'step size (deg)',
+         xlim=c(-10, 70), ylim=c(0.5,5.5),
+         bty='n', axes=FALSE)
+
+    for (rot_idx in c(1,2,3,4,5)) {
+      rotation <- c(20,30,40,50,60)[rot_idx]
+      propvals <- sitprop[which(sitprop$rotation == rotation
+                                
+      ), depvar]
+      
+      
+      
+    }
+  
+  }
+  
+}
 
 # bi-modal final strategy fits -----
 
 fitFinalStrategyDistributions <- function(properties=NULL) {
   
   if (is.null(properties)) {
-    properties <- extractEmpiricalProperties()
+    properties <- getProperties()
   }
 
   fixed <- data.frame('m'=c(0, NA), 's'=c(NA,NA), 'w'=c(NA,NA))
@@ -497,7 +561,7 @@ plotFinalStratModeWeights <- function() {
 plotFinalStratDistributions <- function(properties=NULL) {
   
   if (is.null(properties)) {
-    properties <- extractEmpiricalProperties()
+    properties <- getProperties()
   }
   read.csv('data/final_strategy_multimodal_parameters.csv') -> allpar
   
@@ -542,7 +606,7 @@ plotFinalStratDistributions <- function(properties=NULL) {
 fitOnsetGammaDistributions <- function(properties=NULL) {
   
   if (is.null(properties)) {
-    properties <- extractEmpiricalProperties()
+    properties <- getProperties()
   }
   
   colname <- 'stratdev_onset'
@@ -602,7 +666,7 @@ fitOnsetGammaDistributions <- function(properties=NULL) {
 plotOnsetGamma <- function(properties=NULL) {
   
   if (is.null(properties)) {
-    properties <- extractEmpiricalProperties()
+    properties <- getProperties()
   }
   
   colname <- 'stratdev_onset'
@@ -651,7 +715,7 @@ plotOnsetGamma <- function(properties=NULL) {
 checkStratDevDuration <- function(properties=NULL) {
   
   if (is.null(properties)) {
-    properties <- extractEmpiricalProperties()
+    properties <- getProperties()
   }
   
   properties[which(!is.na(properties$devel_duration)),] -> properties
@@ -718,7 +782,7 @@ checkStratDevDuration <- function(properties=NULL) {
 correlateSDs <- function(properties=NULL) {
   
   if (is.null(properties)) {
-    properties <- extractEmpiricalProperties()
+    properties <- getProperties()
   }
   
   # one of them is too high:
@@ -747,7 +811,7 @@ correlateSDs <- function(properties=NULL) {
 plotSDbyRotation <- function(properties=NULL) {
   
   if (is.null(properties)) {
-    properties <- extractEmpiricalProperties()
+    properties <- getProperties()
   }
   
   # one of them is too high:
