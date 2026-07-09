@@ -90,7 +90,11 @@ So that makes 2 extra parameters (or more likely distributions with multiple par
 We can use the data to estimate the properties of the distribution of strategy development styles. First we extract them for all participants.
 
 ```{r extract_parameters}
-properties <- extractEmpiricalProperties()
+if (file.exists('data/empirical_properties.csv')) {
+  properties <- read.csv('data/empirical_properties.csv', stringsAsFactors = FALSE)
+} else {
+  properties <- extractEmpiricalProperties()
+}
 head(properties)
 ```
 
@@ -197,6 +201,33 @@ It looks like they are all gamma distributed, but let's plot and test this now:
 ```{r inspect_sd_dist, fig.width=8, fig.height=8}
 plotSDbyRotation(properties)
 ```
+
 For all subsets of data, the gamma distribution fits better (d AIC > 2) than the normal distribution, except for the 20 degree condition pre-development SD. However the AIC is still lower for the gamma distribution in that case, so we will go with the gamma distribution throughout. Poisson distributions don't work for this data.
 
 A single gamma distribution could also fit better than 5 separate ones, but there does seem to be a relationship between rotation and standard deviation in all 3 variables.
+
+Here we take a look at this:
+
+```{r sd_fit_pars_rotation, fig.width=7, fig.height=7}
+plotSDfitPars()
+```
+
+It seems that it is possible there some relationship between rotation size and the shape of the distribution from which standard deviations of "noise"/exploration are drawn.
+
+Nevertheless, for now, we will keep it simple and fit a single gamma distribution to each of the 3 standard deviations and not worry about correlations. We can always explore if taking these nuances into account substantially improves the model. The goal is first to see if strategy development ramps with potentially increased (exploratory styles) or decreased (incremental styles) standard deviations works better than a step function approach that does not allow for this nuance. If it does, we can always refine the distribution model a bit, but that's not the point.
+
+# Stepwise components
+
+## Step-time and Step-size
+
+First we look at the distributions of step-time and step-size. We can fit a gamma distribution to both of these, and see if there is a relationship between rotation size and the parameters of the gamma distribution. Although it would be better to ignore them if the relationship is not too strong.
+
+
+
+## Pre- and post-step standard deviations
+
+
+
+
+Now we have all the ingredients to start building the two models.
+
