@@ -90,11 +90,7 @@ So that makes 2 extra parameters (or more likely distributions with multiple par
 We can use the data to estimate the properties of the distribution of strategy development styles. First we extract them for all participants.
 
 ```{r extract_parameters}
-if (file.exists('data/empirical_properties.csv')) {
-  properties <- read.csv('data/empirical_properties.csv', stringsAsFactors = FALSE)
-} else {
-  properties <- extractEmpiricalProperties()
-}
+properties <- getProperties()
 head(properties)
 ```
 
