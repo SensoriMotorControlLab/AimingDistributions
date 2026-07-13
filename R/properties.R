@@ -94,7 +94,7 @@ extractEmpiricalProperties <- function() {
       
       expfit <- Reach::exponentialFit(signal=ARtimecourse,
                                       gridpoints=9, gridfits=5,
-                                      asymptoteRange=c(-10,rotation+10))
+                                      asymptoteRange=c(-10,rot+10))
       
       # print(expfit)
       
