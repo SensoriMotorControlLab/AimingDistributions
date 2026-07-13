@@ -103,7 +103,9 @@ extractEmpiricalProperties <- function() {
         stable_sd      <- c(stable_sd, NA)
       } else {
         predev_sd      <- c(predev_sd, sd(ARtimecourse[1:onset]))
-        devel_sd       <- c(devel_sd, sd(ARtimecourse[onset:stab_trial]))
+        devdur <- (stab_trial - onset) + 1
+        mdevstrat <- (c(1:devdur)/devdur)* final_strat
+        devel_sd       <- c(devel_sd, sd(ARtimecourse[onset:stab_trial]-mdevstrat))
         stable_sd      <- c(stable_sd, sd(ARtimecourse[stab_trial:length(ARtimecourse)]))
       }
       
@@ -127,7 +129,7 @@ extractEmpiricalProperties <- function() {
         poststep_sd <- c(poststep_sd, sd(ARtimecourse[min((length(ARtimecourse)-1),max(1,ceiling(step_par['t']))) :  length(ARtimecourse)]))
       } else {
         step_time <- c(step_time, NA)
-        step_size <- c(step_size, NA)
+        step_size <- c(step_size, step_par['s'])
         prestep_sd  <- c(prestep_sd, sd(ARtimecourse[1:8]))
         poststep_sd <- c(poststep_sd, NA)
       }
@@ -314,7 +316,9 @@ plotStepPars <- function(properties=NULL) {
   }
   
   cat('percentage of people who do not have a strategy:\n(FALSE == strategy, TRUE == no strategy)\n')
-  print(table(properties$rotation, is.na(properties$step_time)))
+  strat_by_rot_table <- table(properties$rotation, is.na(properties$step_time))/40
+  print(strat_by_rot_table)
+  cat('\n(table not used, just confirms patterns)\n')
   
   par(mfrow=c(1,2))
   
@@ -329,12 +333,20 @@ plotStepPars <- function(properties=NULL) {
                                         properties$step_time >= 0 ), 'step_time'])
   all_gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
   
-  cat('overall gamma distribution for step time:\n')
-  print(all_gamma_fit)
+  # cat('overall gamma distribution for step time:\n')
+  # print(all_gamma_fit)
+  
+  rotation <- c(20,30,40,50,60)
+  shape <- rep(all_gamma_fit$estimate['shape'], 5)
+  rate  <- rep(all_gamma_fit$estimate['rate'], 5)
+  
+  step_time_gamma_par <- data.frame('rotation'=rotation, 'shape'=shape, 'rate'=rate)
+  write.csv(step_time_gamma_par, file='data/step_time_gamma_parameters.csv', row.names=FALSE)
   
   # all_poisson_fit <- MASS::fitdistr(propvals, densfun = "poisson")
   # print(all_poisson_fit)
   
+  rot_gamma_d <- c()
   
   X <- seq(.25, 120, length.out=480)
   gY <- dgamma(X, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
@@ -345,6 +357,7 @@ plotStepPars <- function(properties=NULL) {
     rotation <- c(20,30,40,50,60)[rot_idx]
     propvals <- properties[which(properties$rotation == rotation
                                    & properties$step_size > 5
+                                   & properties$step_time >= 0 
                                    # & properties$step_time >= 0 
                                    # & properties$step_time < 100
                                    & !is.na(properties$step_time)
@@ -366,9 +379,11 @@ plotStepPars <- function(properties=NULL) {
     lines(X, (gY/max(gY))+rot_idx-0.5, col='purple', lw=1, lty=2)
     # lines(X, (pY/max(pY))+rot_idx-0.5, col='orange', lw=1, lty=2)
     
-    norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
-    Y <- dnorm(X, mean=norm_fit$estimate['mean'], sd=norm_fit$estimate['sd'])
-    lines(X, (Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
+    rot_gamma_d <- c(rot_gamma_d, dgamma(propvals, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'] ))
+    
+    # norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
+    # Y <- dnorm(X, mean=norm_fit$estimate['mean'], sd=norm_fit$estimate['sd'])
+    # lines(X, (Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
     # print(norm_fit)
     
     
@@ -377,18 +392,31 @@ plotStepPars <- function(properties=NULL) {
   axis(side=1, at=c(0,30,60,90,120))
   axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
   
+  rot_gamma_nll <- Reach::nll(d = rot_gamma_d)
+  rotgAIC <- Reach::AIC(logLik = -1*rot_gamma_nll, k=10, N=length(rot_gamma_d))
+  cat('\nStep Time:\n')
+  cat(sprintf('one gamma AIC: %0.1f, rot. spec. gamma AIC: %0.1f\n\n', stats::AIC(all_gamma_fit, k=2), rotgAIC))
+  
   plot(y = NULL, x = NULL,
        ylab = 'rotation size / density',
        xlab = 'step size (deg)',
        xlim=c(-10, 70), ylim=c(0.5,5.5),
        bty='n', axes=FALSE)
   
-  X <- seq(.25, 70, length.out=280)
+  
+  X <- seq(-10, 70, length.out=241)
+  
+  fixed <- data.frame('m'=c(0, NA), 's'=c(NA,NA), 'w'=c(NA,NA))
+  
+  allpar <- NA
   
   for (rot_idx in c(1,2,3,4,5)) {
     rotation <- c(20,30,40,50,60)[rot_idx]
     propvals <- properties[which(properties$rotation == rotation 
-                                   & !is.na(properties$step_size)
+                                   # & !is.na(properties$step_size)
+                                   # & properties$step_size >= -10
+                                   # & properties$step_size <=  rotation + 10
+                                   
                                    # & properties$step_time < 100
                                    # & !is.na(properties$stratdev_onset)
                                  ), 'step_size']
@@ -398,30 +426,33 @@ plotStepPars <- function(properties=NULL) {
     pvd <- density(propvals, na.rm=TRUE, bw=1.6,
                    n = 161, from=-10, to=70)
 
-    lines(pvd$x, (pvd$y/max(pvd$y))+rot_idx-0.5, col=rot_idx)
+    lines(pvd$x, 0.9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
     points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
     
-    # print(propvals)
-    # gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", start=list(shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate']))
-    gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
-    rgY <- dgamma(X, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
-    lines(X, (rgY/max(rgY))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
+    fixed$m[2] <- rotation/2
+    # fixed$w <- unname(strat_by_rot_table[rot_idx,c(1,2)])
     
-    norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
-    rnY <- dnorm(X, mean=norm_fit$estimate['mean'], sd=norm_fit$estimate['sd'])
-    lines(X, (rnY/max(rnY))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
-    # 
-    # lines(X, (gY/max(gY))+rot_idx-0.5, col='purple', lw=1, lty=2)
-    # # lines(X, (pY/max(pY))+rot_idx-0.5, col='orange', lw=1, lty=2)
+    fitpar <- Reach::multiModalFit(x=propvals, n=2, points=6, best=4, fixed=fixed)
+
+    fitpar$rotation <- rotation
+
+    if (is.data.frame(allpar)) {
+      allpar <- rbind(allpar, fitpar)
+    } else {
+      allpar <- fitpar
+    }
     
-    # print(c('gamma'=stats::AIC(gamma_fit, k=2), 'normal'=stats::AIC(norm_fit, k=2)))
-    
-    cat(sprintf('step-size gamma distribution for %d rotation:\n',rotation))
-    print(gamma_fit)
-    
-    
+    Reach::multiModalModel(x=X, par=fitpar) -> yvals
+    lines(X, 0.9*(yvals/(max(yvals)))+rot_idx-0.45, col=rot_idx, lw=2)
+    points(x = c(rotation, rotation/2),
+           rep(rot_idx+0.4,2),
+           col=rot_idx, pch=6, cex=1)
     
   }
+  
+  print(allpar)
+  
+  write.csv(allpar, file='data/step_size_multimodal_parameters.csv', row.names=FALSE)
   
   axis(side=1, at=c(0,20,40,60))
   axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
@@ -437,32 +468,119 @@ plotStepSD <- function(properties=NULL) {
   par(mfrow=c(1,3))
   
   steptrue <- c(FALSE,        TRUE,         TRUE         )
-  depvar   <- c('prestep_sd', 'prestep_sd', 'poststep_sd')
+  depvars   <- c('prestep_sd', 'prestep_sd', 'poststep_sd')
+  
+  X <- seq(.25, 40, length.out=160)
+  
+  
+  rotation <- c()
+  makestep <- c()
+  phase    <- c()
+  shape    <- c()
+  rate     <- c()
   
   for (situation in c(1,2,3)) {
     if (steptrue[situation]) {
-      sitprop <- propertiesp[which(!is.na(properties$step_time)),]
+      sitprop <- properties[which(!is.na(properties$step_time)),]
     } else {
-      sitprop <- propertiesp[which(is.na(properties$step_time)),]
+      sitprop <- properties[which(is.na(properties$step_time)),]
     }
-      
+    depvar <- depvars[situation]
+    print(depvar)
+    
+    
+    
     plot(y = NULL, x = NULL,
-         ylab = 'SD (by rotation size)',
-         xlab = 'step size (deg)',
-         xlim=c(-10, 70), ylim=c(0.5,5.5),
+         ylab = 'density (by rotation size)',
+         xlab = sprintf('%s (deg)', depvar ),
+         xlim=c(0, max(X)), ylim=c(0.5,5.5),
          bty='n', axes=FALSE)
-
+    
+    
+    all_propval <- sitprop[, depvar]
+    # print(range(all_propval))
+    # print(range(all_propval, na.rm=TRUE))
+    all_propval <- all_propval[which(!is.na(all_propval))]
+    all_propval[which(all_propval <= 0)] <- .Machine$double.eps
+    all_gamma_fit <- MASS::fitdistr(all_propval, densfun = "gamma", lower=c(1.001, 0.001), upper=c(1000,1000))
+    agY <- dgamma(X, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+    
+    allAIC <- stats::AIC(all_gamma_fit, k=2)
+    
+    # all_norm_fit <- MASS::fitdistr(all_propval, densfun = "normal")
+    # anY <- dnorm(X, mean=all_norm_fit$estimate['mean'], sd=all_norm_fit$estimate['sd'])
+    
+    rot_d <- c()
+    
     for (rot_idx in c(1,2,3,4,5)) {
-      rotation <- c(20,30,40,50,60)[rot_idx]
-      propvals <- sitprop[which(sitprop$rotation == rotation
+      rot <- c(20,30,40,50,60)[rot_idx]
+      propvals <- sitprop[which(sitprop$rotation == rot
                                 
       ), depvar]
+      # print(propvals)
+      propvals <- propvals[which(!is.na(propvals))]
+      propvals[which(propvals <= 0)] <- .Machine$double.eps
+      
+      points(propvals, rep(rot_idx-0.55, length(propvals)), col=rot_idx, pch=20, cex=0.5)
+      
+      pvd <- density(propvals, na.rm=TRUE, 
+                     n = length(X), from=min(X), to=max(X))
+      
+      lines(x = c(0,max(X)),
+            y = rep(0,2)+rot_idx-0.5,
+            col='#ddd')
+      lines(x   = pvd$x, 
+            y   = 0.9*(pvd$y/max(pvd$y))+rot_idx-0.5, 
+            col = rot_idx)
+      
+      lines(x   = X, 
+            y   = 0.9*(agY/max(agY))+rot_idx-0.5, 
+            col = 'purple', lw=1, lty=2)
+      # lines(x   = X, 
+      #       y   = 0.9*(anY/max(anY))+rot_idx-0.5, 
+      #       col = 'orange', lw=1, lty=2)
       
       
+      gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", lower=c(1.001, 0.001), upper=c(1000,1000))
+      Y <- dgamma(X, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
+      lines(X, 0.9*(Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
+      
+      # norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
+      # Y <- dnorm(X, mean=norm_fit$estimate['mean'], sd=norm_fit$estimate['sd'])
+      # lines(X, 0.9*(Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=3)
+      
+      rot_d <- c(rot_d, dgamma(propvals, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'] ))
+      
+      # gamma_nll <- nll(d = dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'] ))
+      # agAIC <- Reach::AIC(logLik = -1*gamma_nll, k=2, N=length(propvals))
+      # cat(sprintf('gamma AIC: %0.1f, all gamma AIC: %0.1f\n',stats::AIC(gamma_fit, k=2), agAIC))
+      # print(gamma_fit$estimate)
+      
+      # cat(sprintf('gamma AIC: %0.1f, normal AIC: %0.1f\n',stats::AIC(gamma_fit, k=2), stats::AIC(norm_fit, k=2)))
+      
+      # norm_nll  <- nll(d = dnorm(propvals,  mean=all_norm_fit$estimate['mean'], sd=all_norm_fit$estimate['sd']))
+      # anAIC <- Reach::AIC(logLik = -1*norm_nll,  k=2, N=length(propvals))
+      # cat(sprintf('all gamma AIC: %0.1f, all normal AIC: %0.1f\n',agAIC, anAIC))
+      
+      rotation <- c(rotation, rot)
+      makestep <- c(makestep, steptrue[situation])
+      phase    <- c(phase, depvar)
+      shape    <- c(shape, gamma_fit$estimate['shape'])
+      rate     <- c(rate, gamma_fit$estimate['rate'])
       
     }
-  
+    
+    rot_gamma_nll <- nll(d = rot_d)
+    rotgAIC <- Reach::AIC(logLik = -1*rot_gamma_nll, k=10, N=length(rot_d))
+    cat(sprintf('one gamma AIC: %0.1f, 5rot gamma AIC: %0.1f\n', allAIC, rotgAIC))
+    
+    axis(side=1, at=c(0,20,40))
+    axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
+    
   }
+  
+  step_SD_gamma_distr <- data.frame('rotation'=rotation, 'makestep'=makestep, 'phase'=phase, 'shape'=shape, 'rate'=rate)
+  write.csv(step_SD_gamma_distr, file='data/step_SD_gamma_parameters.csv', row.names=FALSE)
   
 }
 
@@ -618,7 +736,7 @@ fitOnsetGammaDistributions <- function(properties=NULL) {
   
   all_gamma_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "gamma")
   cat('\nOnset Trial ALL conditions:\n')
-  # print(gamma_fit)
+  # print(all_gamma_fit)
   
   normal_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "normal")
   poisson_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "poisson")
@@ -627,9 +745,12 @@ fitOnsetGammaDistributions <- function(properties=NULL) {
   cat(sprintf(' normal AIC: %0.1f\n',stats::AIC(normal_fit, k=2)))
   cat(sprintf(' poisson AIC: %0.1f\n\n',stats::AIC(poisson_fit, k=2)))
   
-  dgamma <- dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
-  gamma_AIC_m <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))
-  cat(sprintf(' mgamma AIC: %0.1f\n',gamma_AIC_m))
+  # dgamma <- dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+  # gamma_AIC_m <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))
+  # cat(sprintf(' mgamma AIC: %0.1f\n',gamma_AIC_m))
+  
+  rot_gamma_d <- c()
+  
   
   for (rot_idx in c(1,2,3,4,5)) {
     
@@ -637,7 +758,7 @@ fitOnsetGammaDistributions <- function(properties=NULL) {
     propvals <- properties[which(properties$rotation == rotation), colname]
 
     gamma_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "gamma")
-    cat(sprintf('\nOnset Trial for %d deg:\n', rotation))
+    # cat(sprintf('\nOnset Trial for %d deg:\n', rotation))
     # print(gamma_fit)
     
     normal_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "normal")
@@ -646,21 +767,31 @@ fitOnsetGammaDistributions <- function(properties=NULL) {
 
     poisson_fit <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "poisson")
     
-    cat(sprintf(' gamma AIC: %0.1f\n',stats::AIC(gamma_fit, k=10)))
-    cat(sprintf(' normal AIC: %0.1f\n',stats::AIC(normal_fit, k=10)))
-    cat(sprintf(' poisson AIC: %0.1f\n',stats::AIC(poisson_fit, k=10)))
+    # cat(sprintf(' gamma AIC: %0.1f\n',stats::AIC(gamma_fit, k=10)))
+    # cat(sprintf(' normal AIC: %0.1f\n',stats::AIC(normal_fit, k=10)))
+    # cat(sprintf(' poisson AIC: %0.1f\n',stats::AIC(poisson_fit, k=10)))
     
     dgamma <- dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
-    gamma_AIC_m <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))
-    cat(sprintf(' all gamma AIC: %0.1f\n',gamma_AIC_m))
+    rot_gamma_d <- c(rot_gamma_d, dgamma)
+    # gamma_AIC_m <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))
+    # cat(sprintf(' all gamma AIC: %0.1f\n',gamma_AIC_m))
     
     
   }
   
+  rot_gamma_AIC_m <- Reach::AIC(logLik=-1*Reach::nll(rot_gamma_d),k=10,N=length(rot_gamma_d))
+  cat(sprintf(' rot. spec. gammas AIC: %0.1f\n',rot_gamma_AIC_m))
+  
+  
   cat('\n')
 
-  return(all_gamma_fit)
+  rotation <- c(20,30,40,50,60)
+  shape <- rep(all_gamma_fit$estimate['shape'], length(rotation)) 
+  rate <- rep(all_gamma_fit$estimate['rate'], length(rotation))
   
+  par_df <- data.frame('rotation'=rotation, 'shape'=shape, 'rate'=rate)
+  write.csv(par_df, file='data/stratdev_onset_gamma_parameters.csv', row.names=FALSE)
+
 }
 
 plotOnsetGamma <- function(properties=NULL) {
@@ -753,6 +884,18 @@ checkStratDevDuration <- function(properties=NULL) {
   print(sprintf('strategy development duration bimodal fit:'))
   print(fitpar)
   
+  rotdurbimodpar <- NA
+  for (rotation in c(20,30,40,50,60)) {
+    fitpar$rotation <- rotation
+    if (is.data.frame(rotdurbimodpar)) {
+      rotdurbimodpar <- rbind(rotdurbimodpar, fitpar)
+    } else {
+      rotdurbimodpar <- fitpar
+    }
+  }
+  # print(rotdurbimodpar)
+  write.csv(rotdurbimodpar, file='data/stratdev_duration_multimodal_parameters.csv', row.names=FALSE)
+  
   X <- devdur_density$x
   
   Reach::multiModalModel(x=X, par=fitpar) -> yvals
@@ -839,7 +982,15 @@ plotSDbyRotation <- function(properties=NULL) {
     propvals <- properties[, colname]
     propvals <- propvals[which(!is.na(propvals))]
     all_gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
-    print(all_gamma_fit$estimate)
+    cat(sprintf('\n -= %s =-\n\n', toupper(colname)))
+    cat(sprintf('one gamma AIC: %0.1f\n',stats::AIC(all_gamma_fit, k=2)))
+    # print(all_gamma_fit$estimate)
+    
+    all_norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
+    cat(sprintf('one normal AIC: %0.1f\n',stats::AIC(all_norm_fit, k=2)))
+    # print(all_norm_fit$estimate)
+    
+    rot_gamma_d <- c()
     
     phase <- c(phase, colname)
     rotation <- c(rotation, 200)
@@ -866,17 +1017,22 @@ plotSDbyRotation <- function(properties=NULL) {
       shape <- c(shape, gamma_fit$estimate['shape'])
       rate <- c(rate, gamma_fit$estimate['rate'])
       
-      dgamma <- dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
-      all_gamma_AIC <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))[1]
-      # print(all_gamma_AIC)
+      # dgamma <- dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+      # all_gamma_AIC <- Reach::AIC(logLik=-1*Reach::nll(dgamma),k=2,N=length(propvals))[1]
+      # # print(all_gamma_AIC)
+      # 
+      # cat(sprintf('%s, %d -- gamma AIC: %0.1f,  normal AIC: %0.1f\n', colname, rot ,stats::AIC(gamma_fit, k=10),stats::AIC(normal_fit, k=10)))
+      # cat(sprintf("all gamma AIC: %0.1f\n", all_gamma_AIC))
       
-      cat(sprintf('%s, %d -- gamma AIC: %0.1f,  normal AIC: %0.1f\n', colname, rot ,stats::AIC(gamma_fit, k=10),stats::AIC(normal_fit, k=10)))
-      cat(sprintf("all gamma AIC: %0.1f\n", all_gamma_AIC))
+      rot_gamma_d <- dgamma(propvals, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
 
     }
     
-    axis(side=1,at=pretty(valrange))
+    axis(side=1,at=seq(0,max(valrange),max(valrange)/3))
     axis(side=2,at=c(1,2,3,4,5),labels=c(20,30,40,50,60))
+    
+    rot_gamma_AIC_m <- Reach::AIC(logLik=-1*Reach::nll(rot_gamma_d),k=10,N=length(rot_gamma_d))
+    cat(sprintf('rot. spec. gammas AIC: %0.1f\n', rot_gamma_AIC_m))
   
   }
   
