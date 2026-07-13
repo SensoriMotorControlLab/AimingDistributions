@@ -1,5 +1,6 @@
+# PROPERTY EXTRACTION -----
 
-# generic / all properties ----
+## generic / all properties ----
 
 extractEmpiricalProperties <- function() {
   
@@ -42,7 +43,8 @@ extractEmpiricalProperties <- function() {
                            pattern = sprintf("SUMMARY_aiming%d", rot))
     
     for (rotfile in rotfiles) {
-      
+      ppno <- ppno + 1
+      cat(sprintf('working on participant %d (%d rotation)\n', ppno, rot))
       ppid <- substr(strsplit(rotfile, "_")[[1]][3], 1, 6)
       # take first 6 characters of string:
       # ppid <- substr(fnend, 1, 6)
@@ -273,7 +275,7 @@ plotPropertyDistributionsByRotation <- function(properties=NULL) {
 } 
 
 
-# step model ----
+## step function fitting ----
 
 stepFunction <- function(par, trials) {
   
@@ -367,7 +369,9 @@ stepFit <- function(data, gridpoints=9, gridfits=5) {
   
 }
 
-# step-size and step-time -----
+
+# STEPWISE modal ----
+## step-size and step-time -----
 
 
 plotStepPars <- function(properties=NULL) {
@@ -645,7 +649,8 @@ plotStepSD <- function(properties=NULL) {
   
 }
 
-# bi-modal final strategy fits -----
+# EXPANDED stepwise model -----
+## bi-modal final strategy fits -----
 
 fitFinalStrategyDistributions <- function(properties=NULL) {
   
@@ -780,7 +785,7 @@ plotFinalStratDistributions <- function(properties=NULL) {
     
 }
 
-# strategy development onset - alpha distribution -----
+## strategy development onset - alpha distribution -----
 
 fitOnsetGammaDistributions <- function(properties=NULL) {
   
@@ -902,7 +907,7 @@ plotOnsetGamma <- function(properties=NULL) {
   
 }
 
-# strategy development duration -----
+## strategy development duration -----
 
 checkStratDevDuration <- function(properties=NULL) {
   
@@ -981,7 +986,7 @@ checkStratDevDuration <- function(properties=NULL) {
   print(Reach::AIC(logLik=logLik, k=c(2,5), N=length(devdur)))  
 }
 
-# standard deviations -----
+## standard deviations -----
 
 correlateSDs <- function(properties=NULL) {
   
