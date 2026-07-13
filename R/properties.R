@@ -5,20 +5,36 @@ extractEmpiricalProperties <- function() {
   
   
   ppno <- 0
-  
+
   participant    <- c()
   rotation       <- c()
-  final_strategy <- c()
-  stratdev_onset <- c()
-  strat_stable   <- c()
-  devel_duration <- c()
-  predev_sd      <- c()
-  devel_sd       <- c()
-  stable_sd      <- c()
-  step_time      <- c()
-  step_size      <- c()
-  prestep_sd     <- c()
-  poststep_sd    <- c()
+  
+  aiming_exp_asymptote  <- c()
+  aiming_exp_changerate <- c()
+  aiming_exp_sd         <- c()
+  
+  aiming_step_time      <- c()
+  aiming_step_size      <- c()
+  aiming_prestep_sd     <- c()
+  aiming_poststep_sd    <- c()
+  
+  adapt_exp_asymptote  <- c()
+  adapt_exp_changerate <- c()
+  adapt_exp_sd         <- c()
+  
+  adapt_step_time      <- c()
+  adapt_step_size      <- c()
+  adapt_prestep_sd     <- c()
+  adapt_poststep_sd    <- c()
+  
+  
+  aiming_final_strategy <- c()
+  aiming_stratdev_onset <- c()
+  aiming_strat_stable   <- c()
+  aiming_devel_duration <- c()
+  aiming_predev_sd      <- c()
+  aiming_devel_sd       <- c()
+  aiming_stable_sd      <- c()
   
   for (rot in c(20,30,40,50,60)) {
     
@@ -74,14 +90,56 @@ extractEmpiricalProperties <- function() {
       participant    <- c(participant, ppid)
       rotation       <- c(rotation, rot)
       
+      # EXPONENTIAL AIMING TIMECOURSE PROPERTIES
+      
+      expfit <- Reach::exponentialFit(signal=ARtimecourse,
+                                      gridpoints=9, gridfits=5,
+                                      asymptoteRange=c(-10,rotation+10))
+      
+      # print(expfit)
+      
+      aiming_exp_asymptote  <- c(aiming_exp_asymptote, expfit['N0'])
+      aiming_exp_changerate <- c(aiming_exp_changerate, expfit['lambda'])
+      expmodel <- Reach::exponentialModel(par=expfit, timepoints=length(ARtimecourse))
+      # print(str(expmodel))
+      aiming_exp_sd         <- c(aiming_exp_sd, sd(ARtimecourse - expmodel$output, na.rm=TRUE))
+      
+      
+      
+      # STEPWISE AIMING TIMECOURSE PROPERTIES
+      
+      step_df <- data.frame('trial'=c(1:length(ARtimecourse)), 'deviation'=ARtimecourse)
+      step_par <- stepFit(data=step_df, gridpoints=6, gridfits=4)
+      # print(step_par)
+      
+      if (step_par['s']>=5) {
+        
+        aiming_step_time   <- c(aiming_step_time,   step_par['t'])
+        aiming_step_size   <- c(aiming_step_size,   step_par['s']) 
+        
+        # use max, so that we do not have an index lower than 0, and min to ensure no more than 8 trials are used?
+        aiming_prestep_sd  <- c(aiming_prestep_sd,  sd(ARtimecourse[1:min(8,max(1, floor(step_par['t'])))]))
+        
+        # use min, so that we do not have an index higher than the length of the timecourse
+        # print( min((length(ARtimecourse)-1),max(1,ceiling(step_par['t']))) )
+        aiming_poststep_sd <- c(aiming_poststep_sd, sd(ARtimecourse[min((length(ARtimecourse)-1),max(1,ceiling(step_par['t']))) :  length(ARtimecourse)]))
+      } else {
+        aiming_step_time   <- c(aiming_step_time,   NA)
+        aiming_step_size   <- c(aiming_step_size,   step_par['s'])
+        aiming_prestep_sd  <- c(aiming_prestep_sd,  sd(ARtimecourse[1:8]))
+        aiming_poststep_sd <- c(aiming_poststep_sd, NA)
+      }
+      
+      # EXPANDED STEPWISE AIMING PROPERTIES
+      
       final_strat    <- median(ARtimecourse[c((length(ARtimecourse)-ntrials+1):length(ARtimecourse))])
-      final_strategy <- c(final_strategy, final_strat)
+      aiming_final_strategy <- c(aiming_final_strategy, final_strat)
       
       onset <- which(ARtimecourse > 5)[1]
       if (final_strat < 5) {
         onset <- NA
       }
-      stratdev_onset <- c(stratdev_onset, onset)
+      aiming_stratdev_onset <- c(aiming_stratdev_onset, onset)
       
       if (is.na(onset)) {
         stab_trial <- NA
@@ -89,72 +147,75 @@ extractEmpiricalProperties <- function() {
         stab_tc <- ARtimecourse[onset:length(ARtimecourse)]
         stab_trial <- Reach::findStabilizationTrial(stab_tc)+onset
       }
-      strat_stable <- c(strat_stable, stab_trial)
+      aiming_strat_stable <- c(aiming_strat_stable, stab_trial)
       
-      devel_duration <- c(devel_duration, stab_trial - onset)
+      aiming_devel_duration <- c(aiming_devel_duration, stab_trial - onset)
       
       if (is.na(onset)) {
-        predev_sd <- c(predev_sd, sd(ARtimecourse))
-        devel_sd  <- c(devel_sd, NA)
-        stable_sd <- c(stable_sd, NA)
+        aiming_predev_sd      <- c(aiming_predev_sd, sd(ARtimecourse)) # whole timecourse?
+        aiming_devel_sd       <- c(aiming_devel_sd,  NA)
+        aiming_stable_sd      <- c(aiming_stable_sd, NA)
       } else if (is.na(stab_trial)) {
-        predev_sd      <- c(predev_sd, sd(ARtimecourse[1:onset]))
-        devel_sd       <- c(devel_sd, NA)
-        stable_sd      <- c(stable_sd, NA)
+        aiming_predev_sd      <- c(aiming_predev_sd, sd(ARtimecourse[1:onset])) # only until onset? when does this ever happen?
+        aiming_devel_sd       <- c(aiming_devel_sd,  NA)
+        aiming_stable_sd      <- c(aiming_stable_sd, NA)
       } else {
-        predev_sd      <- c(predev_sd, sd(ARtimecourse[1:onset]))
+        aiming_predev_sd      <- c(aiming_predev_sd, sd(ARtimecourse[1:onset]))
         devdur <- (stab_trial - onset) + 1
-        mdevstrat <- (c(1:devdur)/devdur)* final_strat
-        devel_sd       <- c(devel_sd, sd(ARtimecourse[onset:stab_trial]-mdevstrat))
-        stable_sd      <- c(stable_sd, sd(ARtimecourse[stab_trial:length(ARtimecourse)]))
+        mdevstrat <- (c(1:devdur)/devdur) * final_strat
+        aiming_devel_sd       <- c(aiming_devel_sd, sd(ARtimecourse[onset:stab_trial]-mdevstrat))
+        aiming_stable_sd      <- c(aiming_stable_sd, sd(ARtimecourse[stab_trial:length(ARtimecourse)]))
       }
       
       # only get steps for the people with a final strategy larger than 5 deg?
       # no, let's have it depend on stepsize... should strongly correlate though
 
-      step_df <- data.frame('trial'=c(1:length(ARtimecourse)), 'deviation'=ARtimecourse)
-      step_par <- stepFit(data=step_df, gridpoints=6, gridfits=4)
-      # print(step_par)
-      
-      if (step_par['s']>=5) {
-      
-        step_time <- c(step_time, step_par['t'])
-        step_size <- c(step_size, step_par['s']) 
-        
-        # use max, so that we do not have an index lower than 0, and min to ensure no more than 8 trials are used?
-        prestep_sd  <- c(prestep_sd, sd(ARtimecourse[1:min(8,max(1, floor(step_par['t'])))]))
-        
-        # use min, so that we do not have an index higher than the length of the timecourse
-        # print( min((length(ARtimecourse)-1),max(1,ceiling(step_par['t']))) )
-        poststep_sd <- c(poststep_sd, sd(ARtimecourse[min((length(ARtimecourse)-1),max(1,ceiling(step_par['t']))) :  length(ARtimecourse)]))
-      } else {
-        step_time <- c(step_time, NA)
-        step_size <- c(step_size, step_par['s'])
-        prestep_sd  <- c(prestep_sd, sd(ARtimecourse[1:8]))
-        poststep_sd <- c(poststep_sd, NA)
-      }
-      
+
     }
  
   }
   
-  prop_df <- data.frame(
-                        participant    = participant,
-                        rotation       = rotation,
-                        final_strategy = final_strategy,
-                        stratdev_onset = stratdev_onset,
-                        strat_stable   = strat_stable,
-                        devel_duration = devel_duration,
-                        predev_sd      = predev_sd,
-                        devel_sd       = devel_sd,
-                        stable_sd      = stable_sd,
-                        step_time      = step_time,
-                        step_size      = step_size,
-                        prestep_sd     = prestep_sd,
-                        poststep_sd    = poststep_sd    
+  
+  aiming_exp_prop_sd <- data.frame(
+                                    participant,
+                                    rotation,
+                                    aiming_exp_asymptote,
+                                    aiming_exp_changerate,
+                                    aiming_exp_sd
   )
   
-  write.csv(prop_df, file='data/empirical_properties.csv', row.names=FALSE, quote=TRUE)
+  write.csv(aiming_exp_prop_sd,
+            file='data/aiming_exp_properties.csv',
+            row.names=FALSE, quote=TRUE)
+
+  aiming_stepwise_prop_df <- data.frame(
+                                        participant           = participant,
+                                        rotation              = rotation,
+                                        aiming_step_time      = aiming_step_time,
+                                        aiming_step_size      = aiming_step_size,
+                                        aiming_prestep_sd     = aiming_prestep_sd,
+                                        aiming_poststep_sd    = aiming_poststep_sd    
+  )
+  
+  write.csv(aiming_stepwise_prop_df, 
+            file='data/aiming_stepwise_properties.csv', 
+            row.names=FALSE, quote=TRUE)
+    
+  aiming_expanded_prop_df <- data.frame(
+                                        participant    = participant,
+                                        rotation       = rotation,
+                                        aiming_final_strategy = aiming_final_strategy,
+                                        aiming_stratdev_onset = aiming_stratdev_onset,
+                                        aiming_strat_stable   = aiming_strat_stable,
+                                        aiming_devel_duration = aiming_devel_duration,
+                                        aiming_predev_sd      = aiming_predev_sd,
+                                        aiming_devel_sd       = aiming_devel_sd,
+                                        aiming_stable_sd      = aiming_stable_sd
+  )
+  
+  write.csv(aiming_expanded_prop_df, 
+            file='data/aiming_expanded_properties.csv', 
+            row.names=FALSE, quote=TRUE)
   
 }
 
