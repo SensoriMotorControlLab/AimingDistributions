@@ -46,8 +46,11 @@ extractEmpiricalProperties <- function() {
     
     for (rotfile in rotfiles) {
       ppno <- ppno + 1
-      cat(sprintf('working on participant %d (%d° rotation)\n', ppno, rot))
+      
       ppid <- substr(strsplit(rotfile, "_")[[1]][3], 1, 6)
+      
+      cat(sprintf('working on participant %d (%s, %d° rotation)\n', ppno, ppid, rot))
+      
       # take first 6 characters of string:
       # ppid <- substr(fnend, 1, 6)
       # ppid <- strsplit(strsplit(rotfile, ".")[[1]][1], "_")[[1]][3]
@@ -98,7 +101,7 @@ extractEmpiricalProperties <- function() {
       rotation       <- c(rotation, rot)
       
       # EXPONENTIAL AIMING TIMECOURSE PROPERTIES
-      
+      # cat('- exponential fit of aiming timecourse\n')
       expfit <- Reach::exponentialFit(signal=ARtimecourse,
                                       gridpoints=9, gridfits=5,
                                       asymptoteRange=c(-10,rot+10))
@@ -112,7 +115,7 @@ extractEmpiricalProperties <- function() {
       aiming_exp_sd         <- c(aiming_exp_sd, sd(ARtimecourse - expmodel$output, na.rm=TRUE))
       
       # EXPONENTIAL ADAPTATION TIMECOURSE PROPERTIES
-      
+      # cat('- exponential fit of adaptation timecourse\n')
       expfit <- Reach::exponentialFit(signal=RDtimecourse,
                                       gridpoints=9, gridfits=5,
                                       asymptoteRange=c(-10,rot+20))
@@ -127,6 +130,7 @@ extractEmpiricalProperties <- function() {
       
       
       # STEPWISE AIMING TIMECOURSE PROPERTIES
+      # cat('- stepwise fit of aiming timecourse\n')
       
       step_df <- data.frame('trial'=c(1:length(ARtimecourse)), 'deviation'=ARtimecourse)
       step_par <- stepFit(data=step_df, gridpoints=6, gridfits=4)
@@ -153,8 +157,10 @@ extractEmpiricalProperties <- function() {
       }
       
       # STEPWISE ADAPTATION TIMECOURSE PROPERTIES
+      # cat('- stepwise fit of adaptation timecourse\n')
       
       step_df <- data.frame('trial'=c(1:length(RDtimecourse)), 'deviation'=RDtimecourse)
+      step_df$deviation[which(step_df$deviation > 120)] <- NA
       step_par <- stepFit(data=step_df, gridpoints=6, gridfits=4)
       # print(step_par)
       
@@ -178,6 +184,7 @@ extractEmpiricalProperties <- function() {
       }
       
       # EXPANDED STEPWISE AIMING PROPERTIES
+      # cat('- expanded stepwise approach to aiming timecourse\n')
       
       final_strat    <- median(ARtimecourse[c((length(ARtimecourse)-ntrials+1):length(ARtimecourse))])
       aiming_final_strategy <- c(aiming_final_strategy, final_strat)
@@ -377,9 +384,10 @@ stepMSE <- function(par, data) {
   # MSE <- mean(errors^2, na.rm=TRUE)
   # 
   # return(MSE)
-  
-  return(mean((stepFunction(par = par, trials = unique(data$trial)) - data$deviation)^2, na.rm=TRUE))
-  # return(mean((stepFunction(par = par, trials = data$trial) - data$deviation)^2, na.rm=TRUE))
+  # MSE <- mean((stepFunction(par = par, trials = unique(data$trial)) - data$deviation)^2, na.rm=TRUE)
+  # print(MSE)
+  # return(MSE)
+  return(mean((stepFunction(par = par, trials = data$trial) - data$deviation)^2, na.rm=TRUE))
   
 }
 
@@ -392,17 +400,23 @@ stepFit <- function(data, gridpoints=9, gridfits=5) {
   
   # stepsizerange <- diff(range(data$deviation, na.rm=TRUE)))
   stepsizerange <- c(-10, 70)
-  stepsizes <- parvals * (diff(stepsizerange) - min(stepsizerange))
+  stepsizes <- parvals * (diff(stepsizerange) + min(stepsizerange))
   
   # steptimemax <- max(data$trial, na.rm=TRUE)
   steptimemax <- 100
   steptimes <- parvals * steptimemax
   
+  # cat('stepsizes:\n')
+  # print(stepsizes)
+  # cat('steptimes:\n')
+  # print(steptimes)
+  
   searchgrid <- expand.grid('t' = steptimes,
                             's' = stepsizes)
-  
+  # print(str(searchgrid))
   MSE <- apply(searchgrid, FUN=stepMSE, MARGIN=c(1), data=data)
   # print(MSE)
+  # cat('SEARCH GRID COMPLETED\n')
   
   # print(data$deviation)
   
