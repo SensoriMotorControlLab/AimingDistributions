@@ -302,14 +302,27 @@ extractEmpiricalProperties <- function() {
 
 getProperties <- function() {
   
-  if (file.exists('data/empirical_properties.csv')) {
-    prop_df <- read.csv('data/empirical_properties.csv')
-  } else {
+  files_needed <- c('data/aiming_exponential_properties.csv',
+                    'data/adaptation_exponential_properties.csv',
+                    'data/aiming_stepwise_properties.csv',
+                    'data/adaptation_stepwise_properties.csv',
+                    'data/aiming_expanded_properties.csv')
+  
+  if (!all(file.exists(files_needed))) {
     extractEmpiricalProperties()
-    prop_df <- read.csv('data/empirical_properties.csv')
   }
   
-  return(prop_df)
+  all_properties <- NA
+  for (file_name in files_needed) {
+    prop_df <- read.csv(file_name, stringsAsFactors = FALSE)
+    if (is.data.frame(all_properties)) {
+      all_properties <- merge(all_properties, prop_df, by=c('participant','rotation'), all=TRUE)
+    } else {
+      all_properties <- prop_df
+    }  
+  }
+  
+  return(all_properties)
   
 }
 
@@ -323,13 +336,35 @@ getProperties <- function() {
 plotPropertyDistributionsByRotation <- function(properties=NULL) {
   
   if (is.null(properties)) {
-    properties <- extractEmpiricalProperties()
+    properties <- getProperties()
   }
   
-  colnames <- c('final_strategy', 'stratdev_onset', 'strat_stable', 'devel_duration', 'predev_sd', 'devel_sd', 'stable_sd', 'step_time', 'step_size', 'prestep_sd', 'poststep_sd')
-  
+  colnames <- c("aiming_exp_asymptote",
+                "aiming_exp_changerate",
+                "aiming_exp_sd",
+                "adapt_exp_asymptote",
+                "adapt_exp_changerate",
+                "adapt_exp_sd",         
+                "aiming_step_time",
+                "aiming_step_size",
+                "aiming_step_sd",
+                "aiming_prestep_sd",    
+                "aiming_poststep_sd",
+                "adapt_step_time",
+                "adapt_step_size",
+                "adapt_step_sd",
+                "adapt_prestep_sd",
+                "adapt_poststep_sd",
+                "aiming_final_strategy",
+                "aiming_stratdev_onset",
+                "aiming_strat_stable",
+                "aiming_devel_duration",
+                "aiming_predev_sd",
+                "aiming_devel_sd",      
+                "aiming_stable_sd")
+    
   par(mar=c(4,3,.2,.2))
-  ncols <- 3
+  ncols <- 4
   layout(matrix(1:(ncols*(ceiling(length(colnames)/ncols))), nrow=ceiling(length(colnames)/ncols), ncol=ncols, byrow=TRUE))
   
   for (colname in colnames) {
@@ -456,18 +491,19 @@ stepFit <- function(data, gridpoints=9, gridfits=5) {
 }
 
 
-# STEPWISE modal ----
+# STEPWISE AIMING model ----
 ## step-size and step-time -----
 
 
-plotStepPars <- function(properties=NULL) {
+plotAimingStepSizeTime <- function(properties=NULL) {
   
   if (is.null(properties)) {
     properties <- getProperties()
   }
   
-  cat('percentage of people who do not have a strategy:\n(FALSE == strategy, TRUE == no strategy)\n')
-  strat_by_rot_table <- table(properties$rotation, is.na(properties$step_time))/40
+  cat('percentage of people with and without a strategy:\n(determined by step-size > 5 degrees)\n')
+  strat_by_rot_table <- table(properties$rotation, is.na(properties$aiming_step_time))/40
+  colnames(strat_by_rot_table) <- c("strategy", "no strategy")
   print(strat_by_rot_table)
   cat('\n(table not used, just confirms patterns)\n')
   
@@ -480,8 +516,8 @@ plotStepPars <- function(properties=NULL) {
        bty='n', axes=FALSE)
   
   
-  propvals <- round(properties[which( properties$step_size > 5 & 
-                                        properties$step_time >= 0 ), 'step_time'])
+  propvals <- round(properties[which( properties$aiming_step_size > 5 & 
+                                        properties$aiming_step_time >= 0 ), 'aiming_step_time'])
   all_gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
   
   # cat('overall gamma distribution for step time:\n')
@@ -507,12 +543,12 @@ plotStepPars <- function(properties=NULL) {
   for (rot_idx in c(1,2,3,4,5)) {
     rotation <- c(20,30,40,50,60)[rot_idx]
     propvals <- properties[which(properties$rotation == rotation
-                                   & properties$step_size > 5
-                                   & properties$step_time >= 0 
+                                   & properties$aiming_step_size > 5
+                                   & properties$aiming_step_time >= 0 
                                    # & properties$step_time >= 0 
                                    # & properties$step_time < 100
-                                   & !is.na(properties$step_time)
-                                 ), 'step_time']
+                                   & !is.na(properties$aiming_step_time)
+                                 ), 'aiming_step_time']
     
     pvd <- density(propvals, na.rm=TRUE, bw=1.6,
                    n = 241, from=0, to=120)
@@ -570,7 +606,7 @@ plotStepPars <- function(properties=NULL) {
                                    
                                    # & properties$step_time < 100
                                    # & !is.na(properties$stratdev_onset)
-                                 ), 'step_size']
+                                 ), 'aiming_step_size']
     
     # print(propvals)
     
@@ -610,7 +646,7 @@ plotStepPars <- function(properties=NULL) {
   
 }
 
-plotStepSD <- function(properties=NULL) {
+plotAimingStepSD <- function(properties=NULL) {
   
   if (is.null(properties)) {
     properties <- getProperties()
@@ -618,8 +654,8 @@ plotStepSD <- function(properties=NULL) {
   
   par(mfrow=c(1,3))
   
-  steptrue <- c(FALSE,        TRUE,         TRUE         )
-  depvars   <- c('prestep_sd', 'prestep_sd', 'poststep_sd')
+  steptrue  <- c( FALSE,               TRUE,                TRUE               )
+  depvars   <- c('aiming_prestep_sd', 'aiming_prestep_sd', 'aiming_poststep_sd')
   
   X <- seq(.25, 40, length.out=160)
   
@@ -632,9 +668,9 @@ plotStepSD <- function(properties=NULL) {
   
   for (situation in c(1,2,3)) {
     if (steptrue[situation]) {
-      sitprop <- properties[which(!is.na(properties$step_time)),]
+      sitprop <- properties[which(!is.na(properties$aiming_step_time)),]
     } else {
-      sitprop <- properties[which(is.na(properties$step_time)),]
+      sitprop <- properties[which(is.na(properties$aiming_step_time)),]
     }
     depvar <- depvars[situation]
     print(depvar)
@@ -734,6 +770,304 @@ plotStepSD <- function(properties=NULL) {
   write.csv(step_SD_gamma_distr, file='data/step_SD_gamma_parameters.csv', row.names=FALSE)
   
 }
+
+
+# STEPWISE ADAPTATION model ----
+## step-size and step-time -----
+
+
+plotAdaptationStepSizeTime <- function(properties=NULL) {
+  
+  if (is.null(properties)) {
+    properties <- getProperties()
+  }
+  
+  par(mfrow=c(1,2))
+  
+  plot(y = NULL, x = NULL,
+       ylab = 'rotation size / density',
+       xlab = 'step time (trials)',
+       xlim=c(0, 120), ylim=c(0.5,5.5),
+       bty='n', axes=FALSE)
+  
+  
+  propvals <- round(properties[which( properties$adapt_step_size > 5 & 
+                                        properties$adapt_step_time >= 0 ), 'adapt_step_time'])
+  all_gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
+  
+  # cat('overall gamma distribution for step time:\n')
+  # print(all_gamma_fit)
+  
+  rotation <- c(20,30,40,50,60)
+  shape <- rep(all_gamma_fit$estimate['shape'], 5)
+  rate  <- rep(all_gamma_fit$estimate['rate'], 5)
+  
+  step_time_gamma_par <- data.frame('rotation'=rotation, 'shape'=shape, 'rate'=rate)
+  write.csv(step_time_gamma_par, file='data/adapt_step_time_gamma_parameters.csv', row.names=FALSE)
+  
+  # all_poisson_fit <- MASS::fitdistr(propvals, densfun = "poisson")
+  # print(all_poisson_fit)
+  
+  rot_gamma_d <- c()
+  
+  X <- seq(.25, 120, length.out=480)
+  gY <- dgamma(X, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+  # pY <- dpois(X, lambda=all_poisson_fit$estimate['lambda'])
+  # print(pY)
+  
+  for (rot_idx in c(1,2,3,4,5)) {
+    rotation <- c(20,30,40,50,60)[rot_idx]
+    propvals <- properties[which(properties$rotation == rotation
+                                 & properties$adapt_step_size > 5
+                                 & properties$adapt_step_time >= 0 
+                                 # & properties$adapt_step_time >= 0 
+                                 # & properties$adapt_step_time < 100
+                                 & !is.na(properties$adapt_step_time)
+    ), 'adapt_step_time']
+    
+    pvd <- density(propvals, na.rm=TRUE, bw=1.6,
+                   n = 241, from=0, to=120)
+    
+    lines(pvd$x, (pvd$y/max(pvd$y))+rot_idx-0.5, col=rot_idx)
+    points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
+    
+    # print(propvals)
+    # gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", start=list(shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate']))
+    gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
+    Y <- dgamma(X, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
+    # print(Y)
+    lines(X, (Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
+    
+    lines(X, (gY/max(gY))+rot_idx-0.5, col='purple', lw=1, lty=2)
+    # lines(X, (pY/max(pY))+rot_idx-0.5, col='orange', lw=1, lty=2)
+    
+    rot_gamma_d <- c(rot_gamma_d, dgamma(propvals, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'] ))
+    
+    # norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
+    # Y <- dnorm(X, mean=norm_fit$estimate['mean'], sd=norm_fit$estimate['sd'])
+    # lines(X, (Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
+    # print(norm_fit)
+    
+    
+  }
+  
+  axis(side=1, at=c(0,30,60,90,120))
+  axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
+  
+  rot_gamma_nll <- Reach::nll(d = rot_gamma_d)
+  rotgAIC <- Reach::AIC(logLik = -1*rot_gamma_nll, k=10, N=length(rot_gamma_d))
+  cat('\nStep Time:\n')
+  cat(sprintf('one gamma AIC: %0.1f, rot. spec. gamma AIC: %0.1f\n\n', stats::AIC(all_gamma_fit, k=2), rotgAIC))
+  
+  ## STEP SIZE NOW ---
+  
+  plot(y = NULL, x = NULL,
+       ylab = 'rotation size / density',
+       xlab = 'step size (deg)',
+       xlim=c(-10, 70), ylim=c(0.5,5.5),
+       bty='n', axes=FALSE)
+  
+  
+  X <- seq(-10, 70, length.out=241)
+  
+  d_norm  <- c()
+  d_gamma <- c()
+  
+  rotation <- c()
+  mu <- c()
+  sigma <- c()
+  
+  # at 50 degrees, the MASS normal distribution fit
+  # runs into nans at some point
+  
+  for (rot_idx in c(1,2,3,4,5)) {
+    rot <- c(20,30,40,50,60)[rot_idx]
+    # print(rot)
+    propvals <- properties[which(properties$rotation == rot 
+                                 # & !is.na(properties$step_size)
+                                 # & properties$step_size >= -10
+                                 # & properties$step_size <=  rot + 10
+                                 
+                                 # & properties$step_time < 100
+                                 # & !is.na(properties$stratdev_onset)
+    ), 'adapt_step_size']
+    
+    # print(sort(propvals))
+    
+    pvd <- density(propvals, na.rm=TRUE, bw=1.6,
+                   n = 161, from=-10, to=70)
+    
+    lines(pvd$x, 0.9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
+    points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
+    
+    cat('normal fit\n')
+    fitnorm  <- MASS::fitdistr(propvals, densfun = "normal")
+    
+    rotation <- c(rotation, rot)
+    mu       <- c(mu, fitnorm$estimate['mean'])
+    sigma    <- c(sigma, fitnorm$estimate['sd'])
+    
+    cat('gamma fit\n')
+    fitgamma <- MASS::fitdistr(propvals, densfun = "gamma")
+    # print(fitgamma$estimate)
+    
+    d_norm  <- c(d_norm,  dnorm(propvals, mean=fitnorm$estimate['mean'], sd=fitnorm$estimate['sd']))
+    d_gamma <- c(d_gamma, dgamma(propvals, shape=fitgamma$estimate['shape'], rate=fitgamma$estimate['rate']))
+    
+    # cat(sprintf('rotation %d: normal AIC: %0.1f, gamma AIC: %0.1f\n', 
+    #             rot, 
+    #             stats::AIC(fitnorm, k=2), 
+    #             stats::AIC(fitgamma, k=2)))
+    
+    # if (is.data.frame(allpar)) {
+    #   allpar <- rbind(allpar, fitpar)
+    # } else {
+    #   allpar <- fitpar
+    # }
+    
+    # lines(X, 0.9*(yvals/(max(yvals)))+rot_idx-0.45, col=rot_idx, lw=2)
+    
+  }
+  
+  cat('Step Size:\n')
+  cat(sprintf('5 rot normal AIC: %0.1f, 5 rot gamma AIC: %0.1f\n', 
+              Reach::AIC(logLik=-1*Reach::nll(d_norm),  k=10, N=length(d_norm)), 
+              Reach::AIC(logLik=-1*Reach::nll(d_gamma), k=10, N=length(d_gamma))))
+  
+  # print(allpar)
+  
+  write.csv(data.frame(rotation=rotation, mean=mu, sd=sigma), file='data/adapt_step_size_normal_parameters.csv', row.names=FALSE)
+  
+  axis(side=1, at=c(0,20,40,60))
+  axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
+  
+}
+
+plotAdaptationStepSD <- function(properties=NULL) {
+  
+  if (is.null(properties)) {
+    properties <- getProperties()
+  }
+  
+  par(mfrow=c(1,3))
+  
+  steptrue  <- c( FALSE,               TRUE,                TRUE               )
+  depvars   <- c('aiming_prestep_sd', 'aiming_prestep_sd', 'aiming_poststep_sd')
+  
+  X <- seq(.25, 40, length.out=160)
+  
+  
+  rotation <- c()
+  makestep <- c()
+  phase    <- c()
+  shape    <- c()
+  rate     <- c()
+  
+  for (situation in c(1,2,3)) {
+    if (steptrue[situation]) {
+      sitprop <- properties[which(!is.na(properties$aiming_step_time)),]
+    } else {
+      sitprop <- properties[which(is.na(properties$aiming_step_time)),]
+    }
+    depvar <- depvars[situation]
+    print(depvar)
+    
+    
+    
+    plot(y = NULL, x = NULL,
+         ylab = 'density (by rotation size)',
+         xlab = sprintf('%s (deg)', depvar ),
+         xlim=c(0, max(X)), ylim=c(0.5,5.5),
+         bty='n', axes=FALSE)
+    
+    
+    all_propval <- sitprop[, depvar]
+    # print(range(all_propval))
+    # print(range(all_propval, na.rm=TRUE))
+    all_propval <- all_propval[which(!is.na(all_propval))]
+    all_propval[which(all_propval <= 0)] <- .Machine$double.eps
+    all_gamma_fit <- MASS::fitdistr(all_propval, densfun = "gamma", lower=c(1.001, 0.001), upper=c(1000,1000))
+    agY <- dgamma(X, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+    
+    allAIC <- stats::AIC(all_gamma_fit, k=2)
+    
+    # all_norm_fit <- MASS::fitdistr(all_propval, densfun = "normal")
+    # anY <- dnorm(X, mean=all_norm_fit$estimate['mean'], sd=all_norm_fit$estimate['sd'])
+    
+    rot_d <- c()
+    
+    for (rot_idx in c(1,2,3,4,5)) {
+      rot <- c(20,30,40,50,60)[rot_idx]
+      propvals <- sitprop[which(sitprop$rotation == rot
+                                
+      ), depvar]
+      # print(propvals)
+      propvals <- propvals[which(!is.na(propvals))]
+      propvals[which(propvals <= 0)] <- .Machine$double.eps
+      
+      points(propvals, rep(rot_idx-0.55, length(propvals)), col=rot_idx, pch=20, cex=0.5)
+      
+      pvd <- density(propvals, na.rm=TRUE, 
+                     n = length(X), from=min(X), to=max(X))
+      
+      lines(x = c(0,max(X)),
+            y = rep(0,2)+rot_idx-0.5,
+            col='#ddd')
+      lines(x   = pvd$x, 
+            y   = 0.9*(pvd$y/max(pvd$y))+rot_idx-0.5, 
+            col = rot_idx)
+      
+      lines(x   = X, 
+            y   = 0.9*(agY/max(agY))+rot_idx-0.5, 
+            col = 'purple', lw=1, lty=2)
+      # lines(x   = X, 
+      #       y   = 0.9*(anY/max(anY))+rot_idx-0.5, 
+      #       col = 'orange', lw=1, lty=2)
+      
+      
+      gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", lower=c(1.001, 0.001), upper=c(1000,1000))
+      Y <- dgamma(X, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
+      lines(X, 0.9*(Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
+      
+      # norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
+      # Y <- dnorm(X, mean=norm_fit$estimate['mean'], sd=norm_fit$estimate['sd'])
+      # lines(X, 0.9*(Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=3)
+      
+      rot_d <- c(rot_d, dgamma(propvals, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'] ))
+      
+      # gamma_nll <- nll(d = dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'] ))
+      # agAIC <- Reach::AIC(logLik = -1*gamma_nll, k=2, N=length(propvals))
+      # cat(sprintf('gamma AIC: %0.1f, all gamma AIC: %0.1f\n',stats::AIC(gamma_fit, k=2), agAIC))
+      # print(gamma_fit$estimate)
+      
+      # cat(sprintf('gamma AIC: %0.1f, normal AIC: %0.1f\n',stats::AIC(gamma_fit, k=2), stats::AIC(norm_fit, k=2)))
+      
+      # norm_nll  <- nll(d = dnorm(propvals,  mean=all_norm_fit$estimate['mean'], sd=all_norm_fit$estimate['sd']))
+      # anAIC <- Reach::AIC(logLik = -1*norm_nll,  k=2, N=length(propvals))
+      # cat(sprintf('all gamma AIC: %0.1f, all normal AIC: %0.1f\n',agAIC, anAIC))
+      
+      rotation <- c(rotation, rot)
+      makestep <- c(makestep, steptrue[situation])
+      phase    <- c(phase, depvar)
+      shape    <- c(shape, gamma_fit$estimate['shape'])
+      rate     <- c(rate, gamma_fit$estimate['rate'])
+      
+    }
+    
+    rot_gamma_nll <- nll(d = rot_d)
+    rotgAIC <- Reach::AIC(logLik = -1*rot_gamma_nll, k=10, N=length(rot_d))
+    cat(sprintf('one gamma AIC: %0.1f, 5rot gamma AIC: %0.1f\n', allAIC, rotgAIC))
+    
+    axis(side=1, at=c(0,20,40))
+    axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
+    
+  }
+  
+  step_SD_gamma_distr <- data.frame('rotation'=rotation, 'makestep'=makestep, 'phase'=phase, 'shape'=shape, 'rate'=rate)
+  write.csv(step_SD_gamma_distr, file='data/step_SD_gamma_parameters.csv', row.names=FALSE)
+  
+}
+
 
 # EXPANDED stepwise model -----
 ## bi-modal final strategy fits -----
