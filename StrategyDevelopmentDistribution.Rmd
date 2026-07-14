@@ -104,13 +104,59 @@ head(properties)
 
 ### All properties
 
-Just using density functions, this looks like this:
+We now have five files with properties that could be used for model building. Just using density functions, and combining all data, this looks like this:
 
 ```{r property_density_plot, fig.width=9, fig.height=10}
-plotPropertyDistributionsByRotation(properties)
+plotPropertyDistributionsByRotation()
 ```
 
-Looks like at least some of these properties have a clear distribution, and can be used to inform a distribution model. We'll now need to look at each of them in more detail.
+Looks like at least some of these properties have a clear distribution, and that some of them vary as a function of rotation size. This can be used to inform distribution-based models. We'll now need to look at each of them in more detail.
+
+### Stepwise components
+
+#### Aiming Step-time and Step-size
+
+First we look at the distributions of step-time and step-size. We can fit a gamma distribution to both of these, and see if there is a relationship between rotation size and the parameters of the gamma distribution. Although it would be better to ignore them if the relationship is not too strong.
+
+```{r steptime_size, fig.width=8, fig.height=8}
+plotAimingStepSizeTime()
+```
+
+In this case, we will pick a single gamma distribution for step time.
+
+Step size is a bit more complicated. After trimming step-sizes to be larger than -10 and no larger than rotation+10 degrees, we can fit bi-modal distributions the same way as the final strategy size. We fix the means to 0 and half the rotation size. And we get weights that are mostly similar to those of final strategy size. The standard deviations are also highly similar.
+
+#### Aiming Pre- and post-step standard deviations
+
+Now we just need to look at the standard deviations of pre- and post-step intervals. As well as the standard deviations of people without any strategy. Just looking at the initial figure with distributions for all properties, it seems that the `poststep_sd` is very similar to `stable_sd` and `prestep_sd` looks highly similar to `predev_sd` and `devel_sd`. This might also hint at the value of the simpler model, but we will see how this goes.
+
+```{r step_sd_distr, fig.width=7, fig.height=7}
+plotAimingStepSD()
+```
+
+
+#### Adaptation Step-time and Step-size
+
+First we look at the distributions of step-time and step-size. We can fit a gamma distribution to both of these, and see if there is a relationship between rotation size and the parameters of the gamma distribution. Although it would be better to ignore them if the relationship is not too strong.
+
+```{r steptime_size, fig.width=8, fig.height=8}
+plotAdaptationStepSizeTime()
+```
+
+Here, we will also pick a single gamma distribution for step time.
+
+Step size is not really uni-modal anymore, so we have compared a normal and gamma distribution.
+
+#### Adaptation Pre- and post-step standard deviations
+
+Now we just need to look at the standard deviations of pre- and post-step intervals. As well as the standard deviations of people without any strategy. Just looking at the initial figure with distributions for all properties, it seems that the `poststep_sd` is very similar to `stable_sd` and `prestep_sd` looks highly similar to `predev_sd` and `devel_sd`. This might also hint at the value of the simpler model, but we will see how this goes.
+
+```{r step_sd_distr, fig.width=7, fig.height=7}
+plotAdaptationStepSD()
+```
+
+
+
 
 ### Expanded Model
 
@@ -232,29 +278,6 @@ It seems that it is possible there some relationship between rotation size and t
 Nevertheless, for now, we will keep it simple and fit five gamma distributions to each of the 3 standard deviations and not worry about correlations. We can always explore if taking these nuances into account substantially improves the model. The goal is first to see if strategy development ramps with potentially increased (exploratory styles) or decreased (incremental styles) standard deviations works better than a step function approach that does not allow for this nuance. If it does, we can always refine the distribution model a bit, but that's not the point.
 
 Perhaps for now the most important point is that the standard deviations before and after strategy development are drawn from more similar distributions than the standard deviations during strategy development. So it seems to make sense to include this, and this is the property that could make the expanded model an improvement over the stepwise model.
-
-### Stepwise components
-
-#### Step-time and Step-size
-
-First we look at the distributions of step-time and step-size. We can fit a gamma distribution to both of these, and see if there is a relationship between rotation size and the parameters of the gamma distribution. Although it would be better to ignore them if the relationship is not too strong.
-
-```{r steptime_size, fig.width=8, fig.height=8}
-plotStepPars()
-```
-
-In this case, we will pick a single gamma distribution for step time.
-
-Step size is a bit more complicated. I'd expected it to be almost the same as final strategy from the expanded model, but the data looks a bit more messy. After trimming stepsizes to be larger than -10 and no larger than rotation+10 degrees, we can fit bi-modal distributions the same way as the final strategy size. We fix the means to 0 and half the rotation size. And we get weights that are mostly similar to those of final strategy size. The standard deviations are also highly similar.
-
-#### Pre- and post-step standard deviations
-
-Now we just need to look at the standard deviations of pre- and post-step intervals. As well as the standard deviations of people without any strategy. Just looking at the initial figure with distributions for all properties, it seems that the `poststep_sd` is very similar to `stable_sd` and `prestep_sd` looks highly similar to `predev_sd` and `devel_sd`. This might also hint at the value of the simpler model, but we will see how this goes.
-
-```{r step_sd_distr, fig.width=7, fig.height=7}
-plotStepSD()
-```
-
 
 
 # Model building
