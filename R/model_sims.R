@@ -31,5 +31,16 @@ bootstrapStepWiseModel <- function(step_size_dist, step_time_dist, step_SD_dist,
   
   step_times <- rep(NA, n_simulations)
   step_times[mode == 2] <- rgamma(n_simulations, shape = step_time_dist$shape, scale = step_time_dist$scale)
-
+  
+  # three bits of noise:
+  # 1. pre-step noise for people with strategy (and step)
+  # 2. pre-step noise for people without strategy (and no step)
+  # 3. post-step noise for people with strategy (and step)
+  
+  # sd_gamma <- step_SD_dist[which(  step_SD_dist$phase    == 'prestep_sd'
+  #                                & step_SD_dist$makestep == TRUE),]
+  # 
+  # pre_step_strat_noise <- rnorm( n = sum(step_times, na.rm=TRUE), 
+  #                                mean=rep(rgamma(n=length(which(!is.na(step_times))), shape=1.5,rate=1), each=step_times[which(!is.na(step_times))]))
+  
 }
