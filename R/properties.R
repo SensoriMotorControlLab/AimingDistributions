@@ -16,6 +16,7 @@ extractEmpiricalProperties <- function() {
   
   aiming_step_time      <- c()
   aiming_step_size      <- c()
+  aiming_step_sd        <- c()
   aiming_prestep_sd     <- c()
   aiming_poststep_sd    <- c()
   
@@ -25,6 +26,7 @@ extractEmpiricalProperties <- function() {
   
   adapt_step_time      <- c()
   adapt_step_size      <- c()
+  adapt_step_sd        <- c()
   adapt_prestep_sd     <- c()
   adapt_poststep_sd    <- c()
   
@@ -44,7 +46,7 @@ extractEmpiricalProperties <- function() {
     
     for (rotfile in rotfiles) {
       ppno <- ppno + 1
-      cat(sprintf('working on participant %d (%d rotation)\n', ppno, rot))
+      cat(sprintf('working on participant %d (%d° rotation)\n', ppno, rot))
       ppid <- substr(strsplit(rotfile, "_")[[1]][3], 1, 6)
       # take first 6 characters of string:
       # ppid <- substr(fnend, 1, 6)
@@ -56,6 +58,9 @@ extractEmpiricalProperties <- function() {
       
       # aiming
       ARtimecourse <- data$aimdeviation_deg[which(data$rotation_deg == -1 * rot)]
+      
+      # adaptation (reach deviations)
+      RDtimecourse <- data$reachdeviation_deg[which(data$rotation_deg == -1 * rot)]
       
       # plot(ARtimecourse, main=ppid)
       # 
@@ -106,6 +111,19 @@ extractEmpiricalProperties <- function() {
       # print(str(expmodel))
       aiming_exp_sd         <- c(aiming_exp_sd, sd(ARtimecourse - expmodel$output, na.rm=TRUE))
       
+      # EXPONENTIAL ADAPTATION TIMECOURSE PROPERTIES
+      
+      expfit <- Reach::exponentialFit(signal=RDtimecourse,
+                                      gridpoints=9, gridfits=5,
+                                      asymptoteRange=c(-10,rot+20))
+      
+      # print(expfit)
+      
+      adapt_exp_asymptote  <- c(adapt_exp_asymptote, expfit['N0'])
+      adapt_exp_changerate <- c(adapt_exp_changerate, expfit['lambda'])
+      expmodel <- Reach::exponentialModel(par=expfit, timepoints=length(RDtimecourse))
+      # print(str(expmodel))
+      adapt_exp_sd         <- c(adapt_exp_sd, sd(RDtimecourse - expmodel$output, na.rm=TRUE))
       
       
       # STEPWISE AIMING TIMECOURSE PROPERTIES
@@ -113,6 +131,8 @@ extractEmpiricalProperties <- function() {
       step_df <- data.frame('trial'=c(1:length(ARtimecourse)), 'deviation'=ARtimecourse)
       step_par <- stepFit(data=step_df, gridpoints=6, gridfits=4)
       # print(step_par)
+      
+      aiming_step_sd <- c(aiming_step_sd, sd(ARtimecourse - stepFunction(par=step_par, trials=step_df$trial), na.rm=TRUE))
       
       if (step_par['s']>=5) {
         
@@ -130,6 +150,31 @@ extractEmpiricalProperties <- function() {
         aiming_step_size   <- c(aiming_step_size,   step_par['s'])
         aiming_prestep_sd  <- c(aiming_prestep_sd,  sd(ARtimecourse[1:8]))
         aiming_poststep_sd <- c(aiming_poststep_sd, NA)
+      }
+      
+      # STEPWISE ADAPTATION TIMECOURSE PROPERTIES
+      
+      step_df <- data.frame('trial'=c(1:length(RDtimecourse)), 'deviation'=RDtimecourse)
+      step_par <- stepFit(data=step_df, gridpoints=6, gridfits=4)
+      # print(step_par)
+      
+      adapt_step_sd <- c(adapt_step_sd, sd(RDtimecourse - stepFunction(par=step_par, trials=step_df$trial), na.rm=TRUE))
+      
+      if (step_par['s']>=5) {
+        
+        adapt_step_time   <- c(adapt_step_time,   step_par['t'])
+        adapt_step_size   <- c(adapt_step_size,   step_par['s']) 
+        
+        # use max, so that we do not have an index lower than 0, and min to ensure no more than 8 trials are used?
+        adapt_prestep_sd  <- c(adapt_prestep_sd,  sd(RDtimecourse[1:min(8,max(1, floor(step_par['t'])))]))
+        
+        # use min, so that we do not have an index higher than the length of the timecourse
+        adapt_poststep_sd <- c(adapt_poststep_sd, sd(RDtimecourse[min((length(RDtimecourse)-1),max(1,ceiling(step_par['t']))) :  length(RDtimecourse)]))
+      } else {
+        adapt_step_time   <- c(adapt_step_time,   NA)
+        adapt_step_size   <- c(adapt_step_size,   step_par['s'])
+        adapt_prestep_sd  <- c(adapt_prestep_sd,  sd(RDtimecourse[1:8]))
+        adapt_poststep_sd <- c(adapt_poststep_sd, NA)
       }
       
       # EXPANDED STEPWISE AIMING PROPERTIES
@@ -187,14 +232,27 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(aiming_exp_prop_sd,
-            file='data/aiming_exp_properties.csv',
+            file='data/aiming_exponential_properties.csv',
             row.names=FALSE, quote=TRUE)
 
+  adapt_exp_prop_sd <- data.frame(
+    participant,
+    rotation,
+    adapt_exp_asymptote,
+    adapt_exp_changerate,
+    adapt_exp_sd
+  )
+  
+  write.csv(adapt_exp_prop_sd,
+            file='data/adaptation_exponential_properties.csv',
+            row.names=FALSE, quote=TRUE)
+  
   aiming_stepwise_prop_df <- data.frame(
                                         participant           = participant,
                                         rotation              = rotation,
                                         aiming_step_time      = aiming_step_time,
                                         aiming_step_size      = aiming_step_size,
+                                        aiming_step_sd        = aiming_step_sd,
                                         aiming_prestep_sd     = aiming_prestep_sd,
                                         aiming_poststep_sd    = aiming_poststep_sd    
   )
@@ -202,7 +260,21 @@ extractEmpiricalProperties <- function() {
   write.csv(aiming_stepwise_prop_df, 
             file='data/aiming_stepwise_properties.csv', 
             row.names=FALSE, quote=TRUE)
-    
+  
+  adapt_stepwise_prop_df <- data.frame(
+    participant           = participant,
+    rotation              = rotation,
+    adapt_step_time       = aiming_step_time,
+    adapt_step_size       = adapt_step_size,
+    adapt_step_sd         = adapt_step_sd,
+    adapt_prestep_sd      = adapt_prestep_sd,
+    adapt_poststep_sd     = adapt_poststep_sd    
+  )
+  
+  write.csv(adapt_stepwise_prop_df, 
+            file='data/adaptation_stepwise_properties.csv', 
+            row.names=FALSE, quote=TRUE)
+  
   aiming_expanded_prop_df <- data.frame(
                                         participant    = participant,
                                         rotation       = rotation,
