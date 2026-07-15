@@ -130,7 +130,7 @@ Step size is a bit more complicated. After trimming step-sizes to be larger than
 
 Now we just need to look at the standard deviations of pre- and post-step intervals. As well as the standard deviations of people without any strategy. Just looking at the initial figure with distributions for all properties, it seems that the `poststep_sd` is very similar to `stable_sd` and `prestep_sd` looks highly similar to `predev_sd` and `devel_sd`. This might also hint at the value of the simpler model, but we will see how this goes.
 
-```{r step_sd_distr, fig.width=7, fig.height=7}
+```{r step_sd_distr, fig.width=9, fig.height=7}
 plotAimingStepSD()
 ```
 
