@@ -239,7 +239,7 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(aiming_exp_prop_sd,
-            file='data/aiming_exponential_properties.csv',
+            file='data/properties/aiming_exponential_properties.csv',
             row.names=FALSE, quote=TRUE)
 
   adapt_exp_prop_sd <- data.frame(
@@ -251,7 +251,7 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(adapt_exp_prop_sd,
-            file='data/adaptation_exponential_properties.csv',
+            file='data/properties/adaptation_exponential_properties.csv',
             row.names=FALSE, quote=TRUE)
   
   aiming_stepwise_prop_df <- data.frame(
@@ -265,7 +265,7 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(aiming_stepwise_prop_df, 
-            file='data/aiming_stepwise_properties.csv', 
+            file='data/properties/aiming_stepwise_properties.csv', 
             row.names=FALSE, quote=TRUE)
   
   adapt_stepwise_prop_df <- data.frame(
@@ -279,7 +279,7 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(adapt_stepwise_prop_df, 
-            file='data/adaptation_stepwise_properties.csv', 
+            file='data/properties/adaptation_stepwise_properties.csv', 
             row.names=FALSE, quote=TRUE)
   
   aiming_expanded_prop_df <- data.frame(
@@ -295,18 +295,18 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(aiming_expanded_prop_df, 
-            file='data/aiming_expanded_properties.csv', 
+            file='data/properties/aiming_expanded_properties.csv', 
             row.names=FALSE, quote=TRUE)
   
 }
 
 getProperties <- function() {
   
-  files_needed <- c('data/aiming_exponential_properties.csv',
-                    'data/adaptation_exponential_properties.csv',
-                    'data/aiming_stepwise_properties.csv',
-                    'data/adaptation_stepwise_properties.csv',
-                    'data/aiming_expanded_properties.csv')
+  files_needed <- c('data/properties/aiming_exponential_properties.csv',
+                    'data/properties/adaptation_exponential_properties.csv',
+                    'data/properties/aiming_stepwise_properties.csv',
+                    'data/properties/adaptation_stepwise_properties.csv',
+                    'data/properties/aiming_expanded_properties.csv')
   
   if (!all(file.exists(files_needed))) {
     extractEmpiricalProperties()
@@ -639,7 +639,7 @@ plotAimingStepSizeTime <- function(properties=NULL) {
   
   print(allpar)
   
-  write.csv(allpar, file='data/step_size_multimodal_parameters.csv', row.names=FALSE)
+  write.csv(allpar, file='data/distributions/step_size_multimodal_parameters.csv', row.names=FALSE)
   
   axis(side=1, at=c(0,20,40,60))
   axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
@@ -767,7 +767,7 @@ plotAimingStepSD <- function(properties=NULL) {
   }
   
   step_SD_gamma_distr <- data.frame('rotation'=rotation, 'makestep'=makestep, 'phase'=phase, 'shape'=shape, 'rate'=rate)
-  write.csv(step_SD_gamma_distr, file='data/step_SD_gamma_parameters.csv', row.names=FALSE)
+  write.csv(step_SD_gamma_distr, file='data/distributions/aiming_step_SD_gamma_parameters.csv', row.names=FALSE)
   
 }
 
@@ -900,14 +900,14 @@ plotAdaptationStepSizeTime <- function(properties=NULL) {
     lines(pvd$x, 0.9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
     points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
     
-    cat('normal fit\n')
+    # cat('normal fit\n')
     fitnorm  <- MASS::fitdistr(propvals, densfun = "normal")
     
     rotation <- c(rotation, rot)
     mu       <- c(mu, fitnorm$estimate['mean'])
     sigma    <- c(sigma, fitnorm$estimate['sd'])
     
-    cat('gamma fit\n')
+    # cat('gamma fit\n')
     fitgamma <- MASS::fitdistr(propvals, densfun = "gamma")
     # print(fitgamma$estimate)
     
@@ -936,7 +936,7 @@ plotAdaptationStepSizeTime <- function(properties=NULL) {
   
   # print(allpar)
   
-  write.csv(data.frame(rotation=rotation, mean=mu, sd=sigma), file='data/adapt_step_size_normal_parameters.csv', row.names=FALSE)
+  write.csv(data.frame(rotation=rotation, mean=mu, sd=sigma), file='data/distributions/adapt_step_size_normal_parameters.csv', row.names=FALSE)
   
   axis(side=1, at=c(0,20,40,60))
   axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
@@ -952,7 +952,7 @@ plotAdaptationStepSD <- function(properties=NULL) {
   par(mfrow=c(1,3))
   
   steptrue  <- c( FALSE,               TRUE,                TRUE               )
-  depvars   <- c('aiming_prestep_sd', 'aiming_prestep_sd', 'aiming_poststep_sd')
+  depvars   <- c('adapt_prestep_sd', 'adapt_prestep_sd', 'adapt_poststep_sd')
   
   X <- seq(.25, 40, length.out=160)
   
@@ -1064,9 +1064,72 @@ plotAdaptationStepSD <- function(properties=NULL) {
   }
   
   step_SD_gamma_distr <- data.frame('rotation'=rotation, 'makestep'=makestep, 'phase'=phase, 'shape'=shape, 'rate'=rate)
-  write.csv(step_SD_gamma_distr, file='data/step_SD_gamma_parameters.csv', row.names=FALSE)
+  write.csv(step_SD_gamma_distr, file='data/distributions/adapt_step_SD_gamma_parameters.csv', row.names=FALSE)
   
 }
+
+# EXPONENTIAL aiming -----
+
+plotExponentialAiming <- function(properties=NULL) {
+  
+  if (is.null(properties)) {
+    properties <- getProperties()
+  }
+  
+  varnames <- c('aiming_exp_asymptote', 'aiming_exp_changerate', 'aiming_exp_sd')
+  
+  par(mfrow=c(1,3))
+  
+  for (varname in varnames) {
+    
+    xrange <- list( 'aiming_exp_asymptote'  = c(-10,70),
+                    'aiming_exp_changerate' = c(-.1,1.1), 
+                    'aiming_exp_sd'         = c(0, 20)
+                )[[varname]]
+    
+    plot(y = NULL, x = NULL,
+         ylab = 'rotation size / density',
+         xlab = sprintf('%s', varname),
+         xlim=xrange, ylim=c(0.5,5.5),
+         bty='n', axes=FALSE)
+    
+    for (rot_idx in c(1,2,3,4,5)) {
+      rot <- c(20,30,40,50,60)[rot_idx]
+      propvals <- properties[which(properties$rotation == rot), varname]
+      
+      propvals <- propvals[which(!is.na(propvals))]
+      
+      if (varname == 'aiming_exp_asymptote') {
+        bw=1.4
+      } else {
+        bw='nrd0'
+      }
+      
+      pvd <- density(propvals, na.rm=TRUE, bw=bw,
+                     n = 300, from=min(xrange), to=max(xrange))
+      
+      lines(pvd$x, .9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
+      points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
+      
+      if (varname == 'aiming_exp_asymptote') {
+        fixed <- data.frame('m'=c(0, rot/2), 's'=c(NA,NA), 'w'=c(NA,NA))
+        fitpar <- Reach::multiModalFit(x=propvals, n=2, points=6, best=4, fixed=fixed)
+        
+        # print(fitpar)
+        Y <- Reach::multiModalModel(x=pvd$x, par=fitpar)
+        lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+      }
+      
+    }
+    
+    axis(side=1)
+    axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
+    
+  }
+  
+}
+
+# EXPONENTIAL adaptation -----
 
 
 # EXPANDED stepwise model -----
