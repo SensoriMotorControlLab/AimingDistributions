@@ -271,7 +271,7 @@ extractEmpiricalProperties <- function() {
   adapt_stepwise_prop_df <- data.frame(
     participant           = participant,
     rotation              = rotation,
-    adapt_step_time       = aiming_step_time,
+    adapt_step_time       = adapt_step_time,
     adapt_step_size       = adapt_step_size,
     adapt_step_sd         = adapt_step_sd,
     adapt_prestep_sd      = adapt_prestep_sd,
@@ -528,7 +528,7 @@ plotAimingStepSizeTime <- function(properties=NULL) {
   rate  <- rep(all_gamma_fit$estimate['rate'], 5)
   
   step_time_gamma_par <- data.frame('rotation'=rotation, 'shape'=shape, 'rate'=rate)
-  write.csv(step_time_gamma_par, file='data/step_time_gamma_parameters.csv', row.names=FALSE)
+  write.csv(step_time_gamma_par, file='data/distributions/aiming_step_time_gamma_parameters.csv', row.names=FALSE)
   
   # all_poisson_fit <- MASS::fitdistr(propvals, densfun = "poisson")
   # print(all_poisson_fit)
@@ -639,7 +639,7 @@ plotAimingStepSizeTime <- function(properties=NULL) {
   
   print(allpar)
   
-  write.csv(allpar, file='data/distributions/step_size_multimodal_parameters.csv', row.names=FALSE)
+  write.csv(allpar, file='data/distributions/aiming_step_size_multimodal_parameters.csv', row.names=FALSE)
   
   axis(side=1, at=c(0,20,40,60))
   axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
@@ -652,10 +652,10 @@ plotAimingStepSD <- function(properties=NULL) {
     properties <- getProperties()
   }
   
-  par(mfrow=c(1,3))
+  par(mfrow=c(1,4))
   
-  steptrue  <- c( FALSE,               TRUE,                TRUE               )
-  depvars   <- c('aiming_prestep_sd', 'aiming_prestep_sd', 'aiming_poststep_sd')
+  steptrue  <- c( NA,               FALSE,               TRUE,                TRUE               )
+  depvars   <- c('aiming_step_sd', 'aiming_prestep_sd', 'aiming_prestep_sd', 'aiming_poststep_sd')
   
   X <- seq(.25, 40, length.out=160)
   
@@ -666,11 +666,15 @@ plotAimingStepSD <- function(properties=NULL) {
   shape    <- c()
   rate     <- c()
   
-  for (situation in c(1,2,3)) {
-    if (steptrue[situation]) {
-      sitprop <- properties[which(!is.na(properties$aiming_step_time)),]
+  for (situation in c(1,2,3,4)) {
+    if (is.na(steptrue[situation])) {
+      sitprop <- properties
     } else {
-      sitprop <- properties[which(is.na(properties$aiming_step_time)),]
+      if (steptrue[situation]) {
+        sitprop <- properties[which(!is.na(properties$aiming_step_time)),]
+      } else {
+        sitprop <- properties[which(is.na(properties$aiming_step_time)),]
+      }
     }
     depvar <- depvars[situation]
     print(depvar)
@@ -803,7 +807,7 @@ plotAdaptationStepSizeTime <- function(properties=NULL) {
   rate  <- rep(all_gamma_fit$estimate['rate'], 5)
   
   step_time_gamma_par <- data.frame('rotation'=rotation, 'shape'=shape, 'rate'=rate)
-  write.csv(step_time_gamma_par, file='data/adapt_step_time_gamma_parameters.csv', row.names=FALSE)
+  write.csv(step_time_gamma_par, file='data/distributions/adapt_step_time_gamma_parameters.csv', row.names=FALSE)
   
   # all_poisson_fit <- MASS::fitdistr(propvals, densfun = "poisson")
   # print(all_poisson_fit)
@@ -949,10 +953,10 @@ plotAdaptationStepSD <- function(properties=NULL) {
     properties <- getProperties()
   }
   
-  par(mfrow=c(1,3))
+  par(mfrow=c(1,4))
   
-  steptrue  <- c( FALSE,               TRUE,                TRUE               )
-  depvars   <- c('adapt_prestep_sd', 'adapt_prestep_sd', 'adapt_poststep_sd')
+  steptrue  <- c( NA,               FALSE,               TRUE,                TRUE               )
+  depvars   <- c('aiming_step_sd', 'aiming_prestep_sd', 'aiming_prestep_sd', 'aiming_poststep_sd')
   
   X <- seq(.25, 40, length.out=160)
   
@@ -963,16 +967,18 @@ plotAdaptationStepSD <- function(properties=NULL) {
   shape    <- c()
   rate     <- c()
   
-  for (situation in c(1,2,3)) {
-    if (steptrue[situation]) {
-      sitprop <- properties[which(!is.na(properties$aiming_step_time)),]
+  for (situation in c(1,2,3,4)) {
+    if (is.na(steptrue[situation])) {
+      sitprop <- properties
     } else {
-      sitprop <- properties[which(is.na(properties$aiming_step_time)),]
+      if (steptrue[situation]) {
+        sitprop <- properties[which(!is.na(properties$aiming_step_time)),]
+      } else {
+        sitprop <- properties[which(is.na(properties$aiming_step_time)),]
+      }
     }
     depvar <- depvars[situation]
     print(depvar)
-    
-    
     
     plot(y = NULL, x = NULL,
          ylab = 'density (by rotation size)',
@@ -1083,7 +1089,7 @@ plotExponentialAiming <- function(properties=NULL) {
   for (varname in varnames) {
     
     xrange <- list( 'aiming_exp_asymptote'  = c(-10,70),
-                    'aiming_exp_changerate' = c(-.1,1.1), 
+                    'aiming_exp_changerate' = c(0,1), 
                     'aiming_exp_sd'         = c(0, 20)
                 )[[varname]]
     
@@ -1093,9 +1099,48 @@ plotExponentialAiming <- function(properties=NULL) {
          xlim=xrange, ylim=c(0.5,5.5),
          bty='n', axes=FALSE)
     
+    if (varname == 'aiming_exp_asymptote') {
+      propvals <- properties[, varname]
+      propvals <- propvals[which(!is.na(propvals))]
+      asymp_fitpar <- Reach::multiModalFit(x=propvals, n=2, points=7, best=4)
+      print(asymp_fitpar)
+      asymp_d <- Reach::multiModalModel(propvals, par=asymp_fitpar)
+      
+      all_exp_asymptote_par <- NA
+    }
+    
+    if (varname == 'aiming_exp_changerate') {
+      propvals <- properties[, varname]
+      propvals <- propvals[which(!is.na(propvals))]
+      exp_rate_fitpar <- Reach::multiModalFit(x=propvals, n=2, points=7, best=4)
+      print(exp_rate_fitpar)
+      exp_rate_d <- Reach::multiModalModel(propvals, par=exp_rate_fitpar)
+      exp_5rate_d <- c()
+    }
+    
+    if (varname == 'aiming_exp_sd') {
+      propvals <- properties[, varname]
+      propvals <- propvals[which(!is.na(propvals))]
+      sd_fitpar <- MASS::fitdistr(propvals, densfun = "gamma")
+      # print(sd_fitpar)
+      exp_sd_1gamma_d <- dgamma(propvals, shape=sd_fitpar$estimate['shape'], rate=sd_fitpar$estimate['rate'])
+      exp_sd_5gamma_d <- c()
+      
+      rotation <- c()
+      shape    <- c()
+      rate     <- c()
+    }
+    
+    
     for (rot_idx in c(1,2,3,4,5)) {
       rot <- c(20,30,40,50,60)[rot_idx]
-      propvals <- properties[which(properties$rotation == rot), varname]
+
+      if (varname == 'aiming_exp_changerate') {
+        propvals <- properties[which(properties$rotation == rot
+                                     & properties$aiming_exp_asymptote > 5), varname]
+      } else {
+        propvals <- properties[which(properties$rotation == rot), varname]
+      }
       
       propvals <- propvals[which(!is.na(propvals))]
       
@@ -1104,7 +1149,7 @@ plotExponentialAiming <- function(properties=NULL) {
       } else {
         bw='nrd0'
       }
-      
+
       pvd <- density(propvals, na.rm=TRUE, bw=bw,
                      n = 300, from=min(xrange), to=max(xrange))
       
@@ -1118,14 +1163,77 @@ plotExponentialAiming <- function(properties=NULL) {
         # print(fitpar)
         Y <- Reach::multiModalModel(x=pvd$x, par=fitpar)
         lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        
+        rot_fit_par <- fitpar
+        rot_fit_par$rotation <- rot
+        if (is.data.frame(all_exp_asymptote_par)) {
+          all_exp_asymptote_par <- rbind(all_exp_asymptote_par, rot_fit_par)
+        } else {
+          all_exp_asymptote_par <- rot_fit_par
+        }
+      }
+      
+      if (varname == 'aiming_exp_changerate') {
+        # fixed <- data.frame('m'=c(NA, NA), 's'=c(NA,NA), 'w'=c(NA,NA))
+        # fitpar <- Reach::multiModalFit(x=propvals, n=2, points=6, best=4) #, fixed=fixed)
+        # 
+        # print(fitpar)
+        # Y <- Reach::multiModalModel(x=pvd$x, par=fitpar)
+        # lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        # exp_5rate_d <- c(exp_5rate_d, Reach::multiModalModel(propvals, par=fitpar))
+        # 
+        Y <- Reach::multiModalModel(x=pvd$x, par=exp_rate_fitpar)
+        lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col='purple', lw=1, lty=2)
+        
+        # # # beta distribution?
+        # # print(propvals)
+        # beta_propvals <- propvals
+        # beta_propvals[which(beta_propvals == 0)] <- 0.00001 #      .Machine$double.eps
+        # beta_propvals[which(beta_propvals == 1)] <- 0.99999 # 1 - .Machine$double.eps
+        # beta_fit <- MASS::fitdistr(beta_propvals, densfun = "beta", start=list(shape1=1.5, shape2=6))
+        # print(beta_fit)
+        # Y <- dbeta(pvd$x[c(2:299)], shape1=beta_fit$estimate['shape1'], shape2=beta_fit$estimate['shape2'])
+        # print(Y)
+        # lines(pvd$x[c(2:299)], .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+      }
+      
+      if (varname == 'aiming_exp_sd') {
+        
+        fitpar <- MASS::fitdistr(propvals, densfun = "gamma")
+        
+        Y <- dgamma(pvd$x, shape=fitpar$estimate['shape'], rate=fitpar$estimate['rate'])
+        lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        
+        exp_sd_5gamma_d <- c(exp_sd_5gamma_d, dgamma(propvals, shape=fitpar$estimate['shape'], rate=fitpar$estimate['rate']) ) 
+        
+        rotation <- c(rotation, rot)
+        shape    <- c(shape, fitpar$estimate['shape'])
+        rate     <- c(rate, fitpar$estimate['rate'])
       }
       
     }
     
+    
     axis(side=1)
     axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
     
+    if (varname == 'aiming_exp_sd') {
+      write.csv(data.frame(rotation=rotation, shape=shape, rate=rate), 
+                file='data/distributions/aiming_exp_sd_gamma_parameters.csv', row.names=FALSE)
+    }
+    
+    if (varname == 'aiming_exp_asymptote') {
+      write.csv(all_exp_asymptote_par, file='data/distributions/aiming_exp_asymptote_multimodal_parameters.csv', row.names=FALSE)
+    }
+    
   }
+  # cat(sprintf('one bi-modal rate AIC: %0.1f, 5 bi-modal rate AIC: %0.1f\n', 
+  #             Reach::AIC(logLik=-1*Reach::nll(exp_rate_d), k=5, N=length(exp_rate_d)), 
+  #             Reach::AIC(logLik=-1*Reach::nll(exp_5rate_d), k=25, N=length(exp_5rate_d))))
+  
+  cat(sprintf('\none gamma SD AIC: %0.1f, 5 gamma SD AIC: %0.1f\n', 
+              Reach::AIC(logLik=-1*Reach::nll(exp_sd_1gamma_d), k=2, N=length(exp_sd_1gamma_d)), 
+              Reach::AIC(logLik=-1*Reach::nll(exp_sd_5gamma_d), k=10, N=length(exp_sd_5gamma_d))))
   
 }
 
