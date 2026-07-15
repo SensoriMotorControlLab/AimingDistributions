@@ -134,6 +134,7 @@ Now we just need to look at the standard deviations of pre- and post-step interv
 plotAimingStepSD()
 ```
 
+Separate gamma functions for each of the five rotations seems to work better in all cases, so we will use that.
 
 #### Adaptation Step-time and Step-size
 
@@ -154,7 +155,7 @@ Now we just need to look at the standard deviations of pre- and post-step interv
 ```{r step_sd_distr, fig.width=7, fig.height=7}
 plotAdaptationStepSD()
 ```
-
+Here again, 5 separate gamma distributions are a better fit than one overall one, for all 3 variables.
 
 
 
