@@ -1102,6 +1102,7 @@ plotExponentialAiming <- function(properties=NULL) {
     if (varname == 'aiming_exp_asymptote') {
       propvals <- properties[, varname]
       propvals <- propvals[which(!is.na(propvals))]
+      # print(min(propvals))
       asymp_fitpar <- Reach::multiModalFit(x=propvals, n=2, points=7, best=4)
       # print(asymp_fitpar)
       asymp_1_d <- Reach::multiModalModel(propvals, par=asymp_fitpar)
@@ -1113,6 +1114,7 @@ plotExponentialAiming <- function(properties=NULL) {
     if (varname == 'aiming_exp_changerate') {
       propvals <- properties[, varname]
       propvals <- propvals[which(!is.na(propvals))]
+      print(min(propvals))
       # exp_rate_fitpar <- Reach::multiModalFit(x=propvals, n=2, points=7, best=4)
       # print(exp_rate_fitpar)
       # exp_rate_d <- Reach::multiModalModel(propvals, par=exp_rate_fitpar)
