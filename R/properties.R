@@ -1266,6 +1266,205 @@ plotExponentialAiming <- function(properties=NULL) {
 
 # EXPONENTIAL adaptation -----
 
+plotExponentialAdaptation <- function(properties=NULL) {
+  
+  if (is.null(properties)) {
+    properties <- getProperties()
+  }
+  
+  varnames <- c('adapt_exp_asymptote', 'adapt_exp_changerate', 'adapt_exp_sd')
+  
+  par(mfrow=c(1,3))
+  
+  for (varname in varnames) {
+    
+    xrange <- list( 'adapt_exp_asymptote'  = c(-10,70),
+                    'adapt_exp_changerate' = c(0,1), 
+                    'adapt_exp_sd'         = c(0, 20)
+    )[[varname]]
+    
+    plot(y = NULL, x = NULL,
+         ylab = 'rotation size / density',
+         xlab = sprintf('%s', varname),
+         xlim=xrange, ylim=c(0.5,5.5),
+         bty='n', axes=FALSE)
+    
+    if (varname == 'adapt_exp_asymptote') {
+      propvals <- properties[, varname]
+      propvals <- propvals[which(!is.na(propvals))]
+      # asymp_fitpar <- Reach::multiModalFit(x=propvals, n=2, points=7, best=4)
+      asymp_fitpar <- MASS::fitdistr(propvals, densfun = "normal")
+      # print(asymp_fitpar)
+      asymp_1_d <- dnorm(propvals, mean=asymp_fitpar$estimate['mean'], sd=asymp_fitpar$estimate['sd'])
+      asymp_5_d <- c()
+      
+      all_exp_asymptote_par <- NA
+      
+      rotation <- c()
+      mu       <- c()
+      sigma    <- c()
+    }
+    
+    if (varname == 'adapt_exp_changerate') {
+      propvals <- properties[, varname]
+      propvals <- propvals[which(!is.na(propvals))]
+
+      one_expfit <- MASS::fitdistr(propvals, densfun = "exponential")
+      exp_1rate_d <- dexp(propvals, rate=one_expfit$estimate['rate'])
+      exp_5rate_d <- c()
+      
+      rotation <- c(20,30,40,50,60)
+      rate     <- rep(one_expfit$estimate['rate'], 5)
+      
+      write.csv(data.frame(rotation=rotation, rate=rate), 
+                file='data/distributions/adapt_exp_changerate_exponential_parameter.csv', row.names=FALSE)
+      
+    }
+    
+    if (varname == 'adapt_exp_sd') {
+      propvals <- properties[, varname]
+      propvals <- propvals[which(!is.na(propvals))]
+      sd_fitpar <- MASS::fitdistr(propvals, densfun = "gamma")
+      # print(sd_fitpar)
+      exp_sd_1gamma_d <- dgamma(propvals, shape=sd_fitpar$estimate['shape'], rate=sd_fitpar$estimate['rate'])
+      exp_sd_5gamma_d <- c()
+      
+      rotation <- c()
+      shape    <- c()
+      rate     <- c()
+    }
+    
+    
+    for (rot_idx in c(1,2,3,4,5)) {
+      rot <- c(20,30,40,50,60)[rot_idx]
+      
+      if (varname == 'adapt_exp_changerate') {
+        # print( which(  properties$rotation == rot
+        #              & properties$aiming_exp_changerate >= 0.99) )
+        propvals <- properties[which(  properties$rotation == rot
+                                       # & properties$aiming_exp_changerate < 0.99
+        ), varname]
+      } else {
+        propvals <- properties[which(properties$rotation == rot), varname]
+      }
+      
+      propvals <- propvals[which(!is.na(propvals))]
+      
+      if (varname == 'adapt_exp_asymptote') {
+        bw=1.4
+      } else {
+        bw='nrd0'
+      }
+      
+      pvd <- density(propvals, na.rm=TRUE, bw=bw,
+                     n = 300, from=min(xrange), to=max(xrange))
+      if (varname == 'adapt_exp_changerate') {
+        lines(pvd$x, (pvd$y/6)+rot_idx-0.45, col=rot_idx)
+      } else {
+        lines(pvd$x, .9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
+      }
+      
+      points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
+      
+      if (varname == 'adapt_exp_asymptote') {
+        # fixed <- data.frame('m'=c(0, rot/2), 's'=c(NA,NA), 'w'=c(NA,NA))
+        # fitpar <- Reach::multiModalFit(x=propvals, n=2, points=6, best=4, fixed=fixed)
+        
+        # print(fitpar)
+        # Y <- Reach::multiModalModel(x=pvd$x, par=fitpar)
+        
+        
+        fitpar <- MASS::fitdistr(propvals, densfun = "normal")
+        Y <- dnorm(pvd$x, mean=fitpar$estimate['mean'], sd=fitpar$estimate['sd'])
+        
+        lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        
+        # rot_fit_par <- fitpar
+        # rot_fit_par$rotation <- rot
+        # if (is.data.frame(all_exp_asymptote_par)) {
+        #   all_exp_asymptote_par <- rbind(all_exp_asymptote_par, rot_fit_par)
+        # } else {
+        #   all_exp_asymptote_par <- rot_fit_par
+        # }
+        
+        rotation <- c(rotation, rot)
+        mu       <- c(mu, fitpar$estimate['mean'])
+        sigma    <- c(sigma, fitpar$estimate['sd'])
+        
+        asymp_5_d <- c(asymp_5_d, dnorm(propvals, mean=fitpar$estimate['mean'], sd=fitpar$estimate['sd']) )
+        
+      }
+      
+      if (varname == 'adapt_exp_changerate') {
+        
+        # tried distributions:
+        # - bi-modal
+        # - beta
+        # - gamma
+        # - chi-squared
+        # - log-normal
+        
+        # going with a single exponential for now: simple
+        
+        # it does miss that there are a few people with a rate of 1
+        # (hence the bi-modal and beta) but I guess very few people do this
+        # they might be stepwise in trial 1
+        
+        expon_fit <- MASS::fitdistr(propvals, densfun = "exponential")
+        Y <- dexp(pvd$x, rate=expon_fit$estimate['rate'])
+        lines(pvd$x, (Y/6)+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        # print(expon_fit)
+        
+        exp_5rate_d <- c(exp_5rate_d, dexp(propvals, rate=one_expfit$estimate['rate']))
+        
+      }
+      
+      if (varname == 'adapt_exp_sd') {
+        
+        fitpar <- MASS::fitdistr(propvals, densfun = "gamma")
+        
+        Y <- dgamma(pvd$x, shape=fitpar$estimate['shape'], rate=fitpar$estimate['rate'])
+        lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        
+        exp_sd_5gamma_d <- c(exp_sd_5gamma_d, dgamma(propvals, shape=fitpar$estimate['shape'], rate=fitpar$estimate['rate']) ) 
+        
+        rotation <- c(rotation, rot)
+        shape    <- c(shape, fitpar$estimate['shape'])
+        rate     <- c(rate, fitpar$estimate['rate'])
+      }
+      
+    }
+    
+    
+    axis(side=1)
+    axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
+    
+    if (varname == 'adapt_exp_sd') {
+      write.csv(data.frame(rotation=rotation, shape=shape, rate=rate), 
+                file='data/distributions/adapt_exp_sd_gamma_parameters.csv', row.names=FALSE)
+    }
+    
+    if (varname == 'adapt_exp_asymptote') {
+      write.csv(data.frame(rotation=rotation, mean=mu, sd=sigma),
+                file='data/distributions/adapt_exp_asymptote_normal_parameters.csv', 
+                row.names=FALSE)
+    }
+    
+  }
+  
+  cat(sprintf('\n1 normal asymptote AIC: %0.1f, 5 normal asymptote AIC: %0.1f\n', 
+              Reach::AIC(logLik=-1*Reach::nll(asymp_1_d), k=5, N=length(asymp_1_d)), 
+              Reach::AIC(logLik=-1*Reach::nll(asymp_5_d), k=25, N=length(asymp_5_d))))
+  
+  cat(sprintf('\n1 exponential change-rate AIC: %0.1f, 5 exponential rate AIC: %0.1f\n', 
+              Reach::AIC(logLik=-1*Reach::nll(exp_1rate_d), k=1, N=length(exp_1rate_d)), 
+              Reach::AIC(logLik=-1*Reach::nll(exp_5rate_d), k=5, N=length(exp_5rate_d))))
+  
+  cat(sprintf('\n1 gamma SD AIC: %0.1f, 5 gamma SD AIC: %0.1f\n', 
+              Reach::AIC(logLik=-1*Reach::nll(exp_sd_1gamma_d), k=2, N=length(exp_sd_1gamma_d)), 
+              Reach::AIC(logLik=-1*Reach::nll(exp_sd_5gamma_d), k=10, N=length(exp_sd_5gamma_d))))
+  
+}
 
 # EXPANDED stepwise model -----
 ## bi-modal final strategy fits -----
