@@ -18,7 +18,10 @@ generateSimpleStepfunctionDistribution <- function(signal) {
 
   # in order to have 1000 runs even in the 7.5% participants without a strategy in the 60 degree rotation
   # we need to run 15000 simulations in total (1000/0.075 = 13333.33... round up to be sure)
-  n_simulations <- 15000
+  
+  # in the exponential model of aiming responses, it's only 5.4% though, which means 18k
+  # simulations, which we round up to 20k
+  n_simulations <- 20000
   simulations <- list()
   
   for (rotation in c(20,30,40,50,60)) {
@@ -45,7 +48,7 @@ generateSimpleStepfunctionDistribution <- function(signal) {
   
 }
 
-bootstrapStepWiseModel <- function(step_size_distr, step_time_distr, step_SD_distr, n_simulations = 15000) {
+bootstrapStepWiseModel <- function(step_size_distr, step_time_distr, step_SD_distr, n_simulations = 20000) {
   
   trials <- 120
   
@@ -110,7 +113,7 @@ generateExponentialFunctionDistribution <- function(signal) {
   
   # in order to have 1000 runs even in the 7.5% participants without a strategy in the 60 degree rotation
   # we need to run 15000 simulations in total (1000/0.075 = 13333.33... round up to be sure)
-  n_simulations <- 15000
+  n_simulations <- 20000
   simulations <- list()
   
   for (rotation in c(20,30,40,50,60)) {
@@ -137,7 +140,7 @@ generateExponentialFunctionDistribution <- function(signal) {
   
 }
 
-bootstrapExponentialModel <- function(step_size_distr, step_time_distr, step_SD_distr, n_simulations = 15000) {
+bootstrapExponentialModel <- function(step_size_distr, step_time_distr, step_SD_distr, n_simulations = 20000) {
   
   trials <- 120
   
