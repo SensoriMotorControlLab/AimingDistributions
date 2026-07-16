@@ -1103,19 +1103,31 @@ plotExponentialAiming <- function(properties=NULL) {
       propvals <- properties[, varname]
       propvals <- propvals[which(!is.na(propvals))]
       asymp_fitpar <- Reach::multiModalFit(x=propvals, n=2, points=7, best=4)
-      print(asymp_fitpar)
-      asymp_d <- Reach::multiModalModel(propvals, par=asymp_fitpar)
-      
+      # print(asymp_fitpar)
+      asymp_1_d <- Reach::multiModalModel(propvals, par=asymp_fitpar)
+      asymp_5_d <- c()
+
       all_exp_asymptote_par <- NA
     }
     
     if (varname == 'aiming_exp_changerate') {
       propvals <- properties[, varname]
       propvals <- propvals[which(!is.na(propvals))]
-      exp_rate_fitpar <- Reach::multiModalFit(x=propvals, n=2, points=7, best=4)
-      print(exp_rate_fitpar)
-      exp_rate_d <- Reach::multiModalModel(propvals, par=exp_rate_fitpar)
+      # exp_rate_fitpar <- Reach::multiModalFit(x=propvals, n=2, points=7, best=4)
+      # print(exp_rate_fitpar)
+      # exp_rate_d <- Reach::multiModalModel(propvals, par=exp_rate_fitpar)
+      # exp_5rate_d <- c()
+      
+      one_expfit <- MASS::fitdistr(propvals, densfun = "exponential")
+      exp_1rate_d <- dexp(propvals, rate=one_expfit$estimate['rate'])
       exp_5rate_d <- c()
+      
+      rotation <- c(20,30,40,50,60)
+      rate     <- rep(one_expfit$estimate['rate'], 5)
+      
+      write.csv(data.frame(rotation=rotation, rate=rate), 
+                file='data/distributions/aiming_exp_changerate_exponential_parameter.csv', row.names=FALSE)
+      
     }
     
     if (varname == 'aiming_exp_sd') {
@@ -1136,8 +1148,11 @@ plotExponentialAiming <- function(properties=NULL) {
       rot <- c(20,30,40,50,60)[rot_idx]
 
       if (varname == 'aiming_exp_changerate') {
-        propvals <- properties[which(properties$rotation == rot
-                                     & properties$aiming_exp_asymptote > 5), varname]
+        # print( which(  properties$rotation == rot
+        #              & properties$aiming_exp_changerate >= 0.99) )
+        propvals <- properties[which(  properties$rotation == rot
+                                     # & properties$aiming_exp_changerate < 0.99
+                                     ), varname]
       } else {
         propvals <- properties[which(properties$rotation == rot), varname]
       }
@@ -1152,18 +1167,22 @@ plotExponentialAiming <- function(properties=NULL) {
 
       pvd <- density(propvals, na.rm=TRUE, bw=bw,
                      n = 300, from=min(xrange), to=max(xrange))
+      if (varname == 'aiming_exp_changerate') {
+        lines(pvd$x, (pvd$y/6)+rot_idx-0.45, col=rot_idx)
+      } else {
+        lines(pvd$x, .9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
+      }
       
-      lines(pvd$x, .9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
       points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
       
       if (varname == 'aiming_exp_asymptote') {
         fixed <- data.frame('m'=c(0, rot/2), 's'=c(NA,NA), 'w'=c(NA,NA))
         fitpar <- Reach::multiModalFit(x=propvals, n=2, points=6, best=4, fixed=fixed)
-        
+
         # print(fitpar)
         Y <- Reach::multiModalModel(x=pvd$x, par=fitpar)
         lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
-        
+
         rot_fit_par <- fitpar
         rot_fit_par$rotation <- rot
         if (is.data.frame(all_exp_asymptote_par)) {
@@ -1171,30 +1190,33 @@ plotExponentialAiming <- function(properties=NULL) {
         } else {
           all_exp_asymptote_par <- rot_fit_par
         }
+        
+        asymp_5_d <- c(asymp_5_d, Reach::multiModalModel(x=propvals, par=fitpar))
+        
       }
       
       if (varname == 'aiming_exp_changerate') {
-        # fixed <- data.frame('m'=c(NA, NA), 's'=c(NA,NA), 'w'=c(NA,NA))
-        # fitpar <- Reach::multiModalFit(x=propvals, n=2, points=6, best=4) #, fixed=fixed)
-        # 
-        # print(fitpar)
-        # Y <- Reach::multiModalModel(x=pvd$x, par=fitpar)
-        # lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
-        # exp_5rate_d <- c(exp_5rate_d, Reach::multiModalModel(propvals, par=fitpar))
-        # 
-        Y <- Reach::multiModalModel(x=pvd$x, par=exp_rate_fitpar)
-        lines(pvd$x, .9*(Y/max(Y))+rot_idx-0.45, col='purple', lw=1, lty=2)
         
-        # # # beta distribution?
-        # # print(propvals)
-        # beta_propvals <- propvals
-        # beta_propvals[which(beta_propvals == 0)] <- 0.00001 #      .Machine$double.eps
-        # beta_propvals[which(beta_propvals == 1)] <- 0.99999 # 1 - .Machine$double.eps
-        # beta_fit <- MASS::fitdistr(beta_propvals, densfun = "beta", start=list(shape1=1.5, shape2=6))
-        # print(beta_fit)
-        # Y <- dbeta(pvd$x[c(2:299)], shape1=beta_fit$estimate['shape1'], shape2=beta_fit$estimate['shape2'])
-        # print(Y)
-        # lines(pvd$x[c(2:299)], .9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        # tried distributions:
+        # - bi-modal
+        # - beta
+        # - gamma
+        # - chi-squared
+        # - log-normal
+        
+        # going with a single exponential for now: simple
+        
+        # it does miss that there are a few people with a rate of 1
+        # (hence the bi-modal and beta) but I guess very few people do this
+        # they might be stepwise in trial 1
+        
+        expon_fit <- MASS::fitdistr(propvals, densfun = "exponential")
+        Y <- dexp(pvd$x, rate=expon_fit$estimate['rate'])
+        lines(pvd$x, (Y/6)+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        # print(expon_fit)
+        
+        exp_5rate_d <- c(exp_5rate_d, dexp(propvals, rate=one_expfit$estimate['rate']))
+        
       }
       
       if (varname == 'aiming_exp_sd') {
@@ -1227,11 +1249,16 @@ plotExponentialAiming <- function(properties=NULL) {
     }
     
   }
-  # cat(sprintf('one bi-modal rate AIC: %0.1f, 5 bi-modal rate AIC: %0.1f\n', 
-  #             Reach::AIC(logLik=-1*Reach::nll(exp_rate_d), k=5, N=length(exp_rate_d)), 
-  #             Reach::AIC(logLik=-1*Reach::nll(exp_5rate_d), k=25, N=length(exp_5rate_d))))
+
+  cat(sprintf('\n1 bi-modal asymptote AIC: %0.1f, 5 bi-modal asymptote AIC: %0.1f\n', 
+              Reach::AIC(logLik=-1*Reach::nll(asymp_1_d), k=5, N=length(asymp_1_d)), 
+              Reach::AIC(logLik=-1*Reach::nll(asymp_5_d), k=25, N=length(asymp_5_d))))
   
-  cat(sprintf('\none gamma SD AIC: %0.1f, 5 gamma SD AIC: %0.1f\n', 
+  cat(sprintf('\n1 exponential change-rate AIC: %0.1f, 5 exponential rate AIC: %0.1f\n', 
+              Reach::AIC(logLik=-1*Reach::nll(exp_1rate_d), k=1, N=length(exp_1rate_d)), 
+              Reach::AIC(logLik=-1*Reach::nll(exp_5rate_d), k=5, N=length(exp_5rate_d))))
+  
+  cat(sprintf('\n1 gamma SD AIC: %0.1f, 5 gamma SD AIC: %0.1f\n', 
               Reach::AIC(logLik=-1*Reach::nll(exp_sd_1gamma_d), k=2, N=length(exp_sd_1gamma_d)), 
               Reach::AIC(logLik=-1*Reach::nll(exp_sd_5gamma_d), k=10, N=length(exp_sd_5gamma_d))))
   
