@@ -1204,11 +1204,19 @@ plotExponentialAiming <- function(properties=NULL) {
         # - chi-squared
         # - log-normal
         
-        # going with a single exponential for now: simple
+        # # according to the python module 'distfit' these are better:
+        #           name      score         loc  ... bootstrap_score bootstrap_pass    color
+        # 0   genextreme   1.401856    0.067995  ...             0.0           None  #e41a1c
+        # 1      lognorm     1.4072   -0.000895  ...             0.0           None  #e41a1c
+        # 2       pareto   2.033844   -0.419678  ...             0.0           None  #377eb8
+        # 3        gamma   2.619115        -0.0  ...             0.0           None  #4daf4a
+        # # but going with a single exponential for now: simple (1 parameter)
         
         # it does miss that there are a few people with a rate of 1
         # (hence the bi-modal and beta) but I guess very few people do this
-        # they might be stepwise in trial 1
+        # just going to max it at 1 though, to get that 2nd peak (and not re-randomize them)
+        # those might be stepwise in trial 1 - with high asymptotes?
+        # not going to worry about it
         
         expon_fit <- MASS::fitdistr(propvals, densfun = "exponential")
         Y <- dexp(pvd$x, rate=expon_fit$estimate['rate'])
