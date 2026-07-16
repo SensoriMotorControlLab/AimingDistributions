@@ -1,0 +1,29 @@
+---
+title: "Model Distributions"
+author: "Marius 't Hart"
+date: "2026-07-16"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source('R/model_sims.R')
+```
+
+## Model Distributions
+
+Here are the data and model distributions for adaptation:
+
+```{r adapt_distr_plots, fig.width=8, fig.height=10}
+plotDataAndFits(signal='adapt')
+```
+
+
+And here are the data and model distributions for aiming:
+
+```{r aiming_distr_plots, fig.width=8, fig.height=10}
+plotDataAndFits(signal='aiming')
+```
+
