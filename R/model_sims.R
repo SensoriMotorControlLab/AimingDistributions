@@ -56,8 +56,12 @@ bootstrapStepWiseModel <- function(step_size_distr, step_time_distr, step_SD_dis
   results <- matrix(0, nrow = n_simulations, ncol = trials)
   
   # step or no step?
-  mode <- as.integer( runif(n_simulations) < step_size_distr$w[2] ) + 1
-  
+  if (step_size_distr$w[1] == 0) {
+    mode <- rep(2, n_simulations) # for now, just use the above-0 asymptote mode)
+  } else {
+    mode <- as.integer( runif(n_simulations) > step_size_distr$w[1] ) + 1
+  }
+
   # step sizes (0 for no step):
   step_sizes <- rep(0, n_simulations)
   step_sizes[mode == 1] <- 0
@@ -121,14 +125,15 @@ generateExponentialFunctionDistribution <- function(signal) {
     
     if (signal == 'adapt') {
       asymp_distr <- asymptote_distributions[asymptote_distributions$rotation==rotation,]
-      asymp_distr <- data.frame('m'=c(asymp_distr$mean, 0), 's'=c(asymp_distr$sd,1), 'w'=c(1,0))
+      asymp_distr <- data.frame('m'=c(0, asymp_distr$mean), 's'=c(1, asymp_distr$sd), 'w'=c(0,1))
     } else {
       asymp_distr <- asymptote_distributions[asymptote_distributions$rotation==rotation,c('m','s','w')]
     }
-    
     # print(asymp_distr)
+    
     changerate_distr <- changerate_distributions[changerate_distributions$rotation==rotation,]
     # print(changerate_distr)
+    
     exp_SD_distr   <- exponential_SD_distributions[exponential_SD_distributions$rotation==rotation,c('shape','rate')]
     # print(exp_SD_distr)
 
@@ -136,13 +141,14 @@ generateExponentialFunctionDistribution <- function(signal) {
                                      changerate_distr = changerate_distr,
                                      exp_SD_distr     = exp_SD_distr,
                                      n_simulations    = n_simulations)
-    print(str(AR))
+    # print(str(AR))
     
-    # simulations[[as.character(rotation)]] <- AR
+    simulations[[as.character(rotation)]] <- AR
 
   }
 
-  # saveRDS(simulations, file = sprintf('data/simulations/%s_stepfunction_simulations.rds', signal))
+  saveRDS(simulations, file = sprintf('data/simulations/%s_exponential_simulations.rds', signal))
+  # return(AR)
   
 }
 
@@ -157,22 +163,29 @@ bootstrapExponentialModel <- function(asymp_distr,
   results <- matrix(0, nrow = n_simulations, ncol = trials)
   
   # ~0 asymptote (1) or above-0 asymptote (2)?
-  mode <- as.integer( runif(n_simulations) > asymp_distr$w[1] ) + 1
-  
+  if (asymp_distr$w[1] == 0) {
+    mode <- rep(2, n_simulations) # for now, just use the above-0 asymptote mode)
+  } else {
+    mode <- as.integer( runif(n_simulations) > asymp_distr$w[1] ) + 1
+  }
+
   # asymptotes:
   asymptotes <- rep(0, n_simulations)
   asymptotes[mode == 1] <- rnorm(sum(mode == 1), mean = asymp_distr$m[1], sd = asymp_distr$s[1])
   asymptotes[mode == 2] <- rnorm(sum(mode == 2), mean = asymp_distr$m[2], sd = asymp_distr$s[2])
   
+  # print(length(which(asymptotes <= 0)))
   
   # step sizes (0 for no step):
   change_rates <- rexp(n = n_simulations, rate = changerate_distr$rate)
   # cat(sprintf("percentage change rates > 1: %0.1f\n", 100*sum(change_rates > 1)/length(change_rates))) 
   change_rates[which(change_rates > 1)] <- 1 # cap at 1, otherwise the exponential function will overshoot the asymptote
   
+  change_rates[which(change_rates < 0.001)] <- 0.001 # cap at 0, otherwise the exponential function will undershoot the asymptote]
+  print(sort(change_rates)[1:100])
   
   rellevels <- mapply(function(r,t) {r^t}, change_rates, matrix(rep(c(0:(trials-1)), each=length(change_rates)), ncol=trials,nrow=length(change_rates)))
-  curves <- matrix(rellevels, nrow=length(change_rates))
+  curves <- 1 - matrix(rellevels, nrow=length(change_rates))
   
   # multiply each row of curves with the asymptote of that simulated participant
   curves <- curves * matrix(rep(asymptotes, each=trials), nrow=n_simulations, ncol=trials)
@@ -248,8 +261,138 @@ readData <- function(signal) {
 
 }
 
-plotAdaptationDataFits <- function() {
+plotDataAndFits <- function(signal='aiming') {
   
+  if (signal %in% c('aiming','adapt')) {
+  } else {
+    cat('signal must be either "aiming" or "adapt"\n')
+  }
   
+  behavior <- readData(signal)
+  stepfunction <- readRDS(sprintf('data/simulations/%s_stepfunction_simulations.rds', signal))
+  exponential <- readRDS(sprintf('data/simulations/%s_exponential_simulations.rds', signal))
+  
+  layout(mat=matrix(c(1:(3*5)), nrow=5, ncol=3, byrow=TRUE))
+  par(mar=c(2,3,1.5,.01))
+  
+  x <- seq(.5,120.5, by=1)
+  y <- seq(-10,70, by=4) 
+  yd <- seq(-10,70,by=.5)
+  
+  bluePal <- colorRampPalette(c("white","blue"))
+  blueramp <- bluePal(200)
+  
+  for (rotation in c(20,30,40,50,60)) {
+    
+    # plot the data
+    plot(NULL,NULL,
+         xlim=c(1,120), ylim=c(-10,70), main='',
+         xlab='', ylab='', xaxt='n', yaxt='n',
+         bty='n'
+         )
+    if (rotation == 20) {
+      title(main=sprintf('%s data', signal), x=60, y=65, cex=1.5)
+    }
+    title(ylab=sprintf('%s° condition', rotation),line=2)
+    axis(side=2, at=seq(0,60,by=20), labels=seq(0,60,by=20), las=2)
+    if (rotation == 60) {
+      axis(side=1, at=c(1,30,60,90,120))
+    } else {
+      axis(side=1, at=c(1,30,60,90,120), labels=rep('',5))
+    }
+
+    # image(x=x, y=y,
+    #       z=t(get2Dcounts(matrix=behavior[[as.character(rotation)]])), 
+    #       add=TRUE, axes=FALSE )
+    
+    image(x=x, y=yd,
+          z=t(get2Ddensity(matrix=behavior[[as.character(rotation)]])), 
+          add=TRUE, axes=FALSE, col=blueramp)
+    
+    
+    # plot the exponential simulations
+    plot(NULL,NULL,
+         xlim=c(1,120), ylim=c(-10,70), main='',
+         xlab='', ylab='', xaxt='n', yaxt='n',
+         bty='n')
+    if (rotation == 20) {
+      title(main=sprintf('exponential distribution'), x=60, y=65, cex=1.5)
+    }
+    if (rotation == 60) {
+      axis(side=1, at=c(1,30,60,90,120))
+    } else {
+      axis(side=1, at=c(1,30,60,90,120), labels=rep('',5))
+    }
+    
+    axis(side=2, at=seq(0,60,by=20), labels=rep('',4), las=2)
+    
+    # image(x=x, y=y,
+    #       z=t(get2Dcounts(matrix=exponential[[as.character(rotation)]])), 
+    #       add=TRUE, axes=FALSE )
+    image(x=x, y=yd,
+          z=t(get2Ddensity(matrix=exponential[[as.character(rotation)]])), 
+          add=TRUE, axes=FALSE, col=blueramp )
+    
+    # plot the step-function simulations
+    plot(NULL,NULL,
+         xlim=c(1,120), ylim=c(-10,70), main='',
+         xlab='', ylab='', xaxt='n', yaxt='n',
+         bty='n')
+    if (rotation == 20) {
+      title(main=sprintf('step-function distribution'), x=60, y=65, cex=1.5)
+    }
+    if (rotation == 60) {
+      axis(side=1, at=c(1,30,60,90,120))
+    } else {
+      axis(side=1, at=c(1,30,60,90,120), labels=rep('',5))
+    }
+    
+    axis(side=2, at=seq(0,60,by=20), labels=rep('',4), las=2)
+    
+    # image(x=x, y=y,
+    #       z=t(get2Dcounts(matrix=stepfunction[[as.character(rotation)]])), 
+    #       axes=FALSE, add=TRUE)
+    image(x=x, y=yd,
+          z=t(get2Ddensity(matrix=stepfunction[[as.character(rotation)]])), 
+          axes=FALSE, add=TRUE, col=blueramp)
+
+    
+  }
+  
+}
+
+get2Dcounts <- function(matrix, from=-10, to=70, n=20) {
+  
+  breaks <- seq(from,to,(to - from)/n)
+  
+  output <- matrix(NA, nrow=n, ncol=ncol(matrix)) 
+  
+  for (col_idx in 1:ncol(matrix)) {
+    data <- matrix[,col_idx]
+    data <- data[data >= from & data < to]
+    # print(data)
+    # print(hist(data, breaks=breaks, plot=FALSE)$counts)
+    output[,col_idx] <- hist(data, breaks=breaks, plot=FALSE)$counts
+  }
+  
+  return(output)
+  
+}
+
+
+get2Ddensity <- function(matrix, from=-10, to=70, n=160) {
+  
+  breaks <- seq(from,to,(to - from)/n)
+  
+  output <- matrix(NA, nrow=n, ncol=ncol(matrix)) 
+  
+  for (col_idx in 1:ncol(matrix)) {
+    data <- matrix[,col_idx]
+    data <- data[data >= from & data < to]
+    # output[,col_idx] <- hist(data, breaks=breaks, plot=FALSE)$counts
+    output[,col_idx] <- density(data, from=from, to=to, n=n)$y
+  }
+  
+  return(output^.5)
   
 }
