@@ -1,8 +1,11 @@
 
-# STEP FUNCTION simulations -----
+# initial parameters -----
+
+## STEP FUNCTION simulations -----
 
 generateSimpleStepfunctionDistribution <- function(signal) {
   
+  # cat('start simulations...\n')
   if (signal %in% c('aiming','adapt')) {
   } else {
     cat('signal must be either "aiming" or "adapt"\n')
@@ -43,9 +46,9 @@ generateSimpleStepfunctionDistribution <- function(signal) {
     simulations[[as.character(rotation)]] <- AR
     
   }
-  
+  # cat('simulations done, saving to file...\n')
   saveRDS(simulations, file = sprintf('data/simulations/%s_stepfunction_simulations.rds', signal))
-  
+  # cat('done!\n')
 }
 
 bootstrapStepWiseModel <- function(step_size_distr, step_time_distr, step_SD_distr, n_simulations = 20000) {
@@ -98,7 +101,7 @@ bootstrapStepWiseModel <- function(step_size_distr, step_time_distr, step_SD_dis
   
 }
 
-# EXPONENTIAL FUNCTION simulations -----
+## EXPONENTIAL FUNCTION simulations -----
 
 generateExponentialFunctionDistribution <- function(signal) {
   
@@ -181,8 +184,8 @@ bootstrapExponentialModel <- function(asymp_distr,
   # cat(sprintf("percentage change rates > 1: %0.1f\n", 100*sum(change_rates > 1)/length(change_rates))) 
   change_rates[which(change_rates > 1)] <- 1 # cap at 1, otherwise the exponential function will overshoot the asymptote
   
-  change_rates[which(change_rates < 0.001)] <- 0.001 # cap at 0, otherwise the exponential function will undershoot the asymptote]
-  print(sort(change_rates)[1:100])
+  change_rates[which(change_rates < 0.01)] <- 0.01 # cap at 0, otherwise the exponential function will undershoot the asymptote]
+  # print(sort(change_rates)[1:100])
   
   rellevels <- mapply(function(r,t) {r^t}, change_rates, matrix(rep(c(0:(trials-1)), each=length(change_rates)), ncol=trials,nrow=length(change_rates)))
   curves <- 1 - matrix(rellevels, nrow=length(change_rates))
@@ -196,7 +199,7 @@ bootstrapExponentialModel <- function(asymp_distr,
   
   noise <- matrix(rnorm(n=trials*n_simulations,
                         mean=0,
-                        sd=rep(step_SD,each=trials)), # same SD for all trials in a simulated participant
+                        sd=rep(exp_SD,each=trials)), # same SD for all trials in a simulated participant
                   nrow=n_simulations,
                   ncol=trials,
                   byrow = TRUE)
@@ -210,7 +213,7 @@ bootstrapExponentialModel <- function(asymp_distr,
 
 
 
-# plot and compare fits ----
+## plot and compare fits ----
 
 readData <- function(signal) {
   
@@ -271,6 +274,9 @@ plotDataAndFits <- function(signal='aiming') {
   behavior <- readData(signal)
   stepfunction <- readRDS(sprintf('data/simulations/%s_stepfunction_simulations.rds', signal))
   exponential <- readRDS(sprintf('data/simulations/%s_exponential_simulations.rds', signal))
+  
+  step_d <- c()
+  exp_d  <- c()
   
   layout(mat=matrix(c(1:(3*5)), nrow=5, ncol=3, byrow=TRUE))
   par(mar=c(2,3,1.5,.01))
@@ -395,4 +401,256 @@ get2Ddensity <- function(matrix, from=-10, to=70, n=160) {
   
   return(output^.5)
   
+}
+
+# statistics ----
+
+
+calculateAICs <- function() {
+  
+  for (signal in c('aiming', 'adapt')) {
+    
+    behavior <- readData(signal)
+    # cat('loading data...\n')
+    stepfunction <- readRDS(sprintf('data/simulations/%s_stepfunction_simulations.rds', signal))
+    exponential <- readRDS(sprintf('data/simulations/%s_exponential_simulations.rds', signal))
+    
+    step_d <- c()
+    exp_d  <- c()
+    # cat('calculating likelihoods...\n')
+    for (rotation in c(60)) {
+      
+      data <- behavior[[as.character(rotation)]]
+      step_model <- stepfunction[[as.character(rotation)]]
+      exp_model  <- exponential[[as.character(rotation)]]
+      
+      step_densities <- getProbabilityDensities(data, step_model)
+      exp_densities  <- getProbabilityDensities(data, exp_model)
+      
+      step_d <- c(step_d, step_densities)
+      exp_d  <- c(exp_d, exp_densities)
+      
+    }
+    # cat('calculating AICs...\n')
+    step_k <- 5 * (5 + 2 + 2)
+    exp_k  <- 5 * (5 + 1 + 2)
+    
+    step_AIC <- Reach::AIC(logLik = -1*Reach::nll(step_d), k = step_k, N=length(step_d))
+    exp_AIC  <- Reach::AIC(logLik = -1*Reach::nll(exp_d ), k = exp_k,  N=length(exp_d ))
+    
+    cat(sprintf('%s: step-function AIC = %.2f, exponential AIC = %.2f\n', signal, step_AIC, exp_AIC))
+    
+  }
+  
+}
+
+getProbabilityDensities <- function(data, model) {
+  
+  if (ncol(data) != ncol(model)) {
+    cat('data and model must have the same number of columns\n')
+    return(NA)
+  }
+  
+  # probd <- c()
+  # for (col_idx in 1:ncol(data)) {
+  #   data_col <- data[,col_idx]
+  #   model_col <- model[,col_idx]
+  #   
+  #   dens <- density(model_col, 
+  #                   from=min(model_col), 
+  #                   to=max(model_col), 
+  #                   n=250) # does n matter here?
+  #   # function(xs, t, h = bw.nrd0(xs)) mean(dnorm(t, mean = xs, sd = h))
+  #   probd <- c(probd, dnorm(data_col, mean = dens$x, sd = dens$bw))
+  # }
+  
+  col_idx <- c(1:ncol(data))
+  
+  probd <- lapply(col_idx, function(idx) {
+    # print(idx)
+    # print(as.double(data[,idx]))
+    data_col <- data[,idx]
+    model_col <- model[,idx]
+    # print(summary(model_col))
+    # print(as.double(model_col))
+    
+    data_col <- data_col[!is.na(data_col)]
+    model_col <- model_col[!is.na(model_col)]
+    
+    dens <- density(model_col, 
+                    from=min(model_col), 
+                    to=max(model_col), 
+                    n=250) # does n matter here?
+    # cat('got density\n')
+    # function(xs, t, h = bw.nrd0(xs)) mean(dnorm(t, mean = xs, sd = h))
+    return(dnorm(data_col, mean = dens$x, sd = dens$bw))
+  })
+  
+  return(unlist(probd))
+  
+}
+
+# FIT the models? -----
+
+fitDistributionModels <- function(signal, model) {
+  
+  if (signal %in% c('aiming','adapt')) {
+  } else {
+    cat('signal must be either "aiming" or "adapt"\n')
+  }
+  
+  if (model %in% c('stepfunction','exponential')) {
+  } else {
+    cat('model must be either "stepfunction" or "exponential"\n')
+  }
+  
+  behavior <- readData(signal)
+  
+  startPar <- getStartingParameters(signal,model)
+  
+  if (model == 'stepfunction') {
+    fitpar <- fitStepfunctionModel(data=behavior, par=startPar$pars, fixed=startPar$fixed)
+  } else if (model == 'exponential') {
+    fitpar <- fitExponentialModel(data=behavior, par=startPar$pars, fixed=startPar$fixed)
+  }
+
+}
+
+getStartingParameters <- function(signal, model) {
+  
+  if (signal %in% c('aiming','adapt')) {
+  } else {
+    cat('signal must be either "aiming" or "adapt"\n')
+  }
+  
+  if (model %in% c('stepfunction','exponential')) {
+  } else {
+    cat('model must be either "stepfunction" or "exponential"\n')
+  }
+  
+  if (model == 'stepfunction') {
+    
+    pars <- list()
+    fixed <- list()
+    
+    for (rotation in c(20,30,40,50,60)) {
+      
+      step_size_distr_name <- list('aiming' = 'multimodal', 'adapt' = 'normal')[[signal]]
+      step_size_distributions <- read.csv(sprintf('data/distributions/%s_step_size_%s_parameters.csv', signal, step_size_distr_name), stringsAsFactors = FALSE)
+      step_time_distributions <- read.csv(sprintf('data/distributions/%s_step_time_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
+      step_SD_distributions   <- read.csv(sprintf('data/distributions/%s_step_SD_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
+      
+      if (signal == 'adapt') {
+        step_size_distr <- step_size_distributions[step_size_distributions$rotation==rotation,]
+        asymp_distr <- data.frame('m'=c(0, step_size_distr$mean), 's'=c(1,step_size_distr$sd), 'w'=c(0,1))
+      } else {
+        asymp_distr <- step_size_distributions[step_size_distributions$rotation==rotation,c('m','s','w')]
+      }
+      step_time_distr <- step_time_distributions[step_time_distributions$rotation==rotation,c('shape','rate')]
+      step_SD_distr   <- step_SD_distributions[which(step_SD_distributions$rotation==rotation & is.na(step_SD_distributions$makestep)),c('shape','rate')]
+      
+      if (signal == 'adapt') {
+        fixed[sprintf('r%d_asymp_m0',       rotation)] = asymp_distr$m[1]
+        fixed[sprintf('r%d_asymp_s0',       rotation)] = asymp_distr$s[1]
+        fixed[sprintf('r%d_asymp_w0',       rotation)] = asymp_distr$w[1]
+        pars[sprintf('r%d_asymp_m1',       rotation)] = asymp_distr$m[2]
+        pars[sprintf('r%d_asymp_s1',       rotation)] = asymp_distr$s[2]
+        fixed[sprintf('r%d_asymp_w1',       rotation)] = asymp_distr$w[2]
+      } else {
+        fixed[sprintf('r%d_asymp_m0',       rotation)] = asymp_distr$m[1]
+        pars[ sprintf('r%d_asymp_s0',       rotation)] = asymp_distr$s[1]
+        fixed[sprintf('r%d_asymp_w0',       rotation)] = asymp_distr$w[1]
+        fixed[sprintf('r%d_asymp_m1',       rotation)] = asymp_distr$m[2]
+        pars[ sprintf('r%d_asymp_s1',       rotation)] = asymp_distr$s[2]
+        fixed[sprintf('r%d_asymp_w1',       rotation)] = asymp_distr$w[2]
+      }
+      pars[sprintf('r%d_steptime_rate',  rotation)] = step_time_distr$rate
+      pars[sprintf('r%d_steptime_shape', rotation)] = step_time_distr$shape
+      pars[sprintf('r%d_noise',          rotation)] = step_SD_distr$shape/step_SD_distr$rate
+      
+    }
+    
+
+  } else if (model == 'exponential') {
+    
+    pars <- list()
+    fixed <- list()
+    
+    for (rotation in c(20,30,40,50,60)) {
+      
+      asymptote_distr_name <- list('aiming' = 'multimodal', 'adapt' = 'normal')[[signal]]
+      asymptote_distributions <- read.csv(sprintf('data/distributions/%s_exp_asymptote_%s_parameters.csv', signal, asymptote_distr_name), stringsAsFactors = FALSE)
+      changerate_distributions <- read.csv(sprintf('data/distributions/%s_exp_changerate_exponential_parameter.csv', signal), stringsAsFactors = FALSE)
+      exponential_SD_distributions   <- read.csv(sprintf('data/distributions/%s_exp_sd_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
+      
+      if (signal == 'adapt') {
+        asymp_distr <- asymptote_distributions[asymptote_distributions$rotation==rotation,]
+        asymp_distr <- data.frame('m'=c(0, asymp_distr$mean), 's'=c(1, asymp_distr$sd), 'w'=c(0,1))
+      } else {
+        asymp_distr <- asymptote_distributions[asymptote_distributions$rotation==rotation,c('m','s','w')]
+      }
+      changerate_distr <- changerate_distributions[changerate_distributions$rotation==rotation,]
+      exp_SD_distr   <- exponential_SD_distributions[exponential_SD_distributions$rotation==rotation,c('shape','rate')]
+      
+      startPar <- list(asymp_distr=asymp_distr,
+                       changerate_distr=changerate_distr,
+                       exp_SD_distr=exp_SD_distr)
+      
+
+      # fixed <- list( fixed,
+      #                sprintf('r%d_asymp_m0', rotation) = asymp_distr$m[1],
+      #                sprintf('r%d_asymp_s0', rotation) = asymp_distr$s[1],
+      #                sprintf('r%d_asymp_w0', rotation) = asymp_distr$w[1])
+      # pars <- list(  pars, 
+      #                sprintf('r%d_asymp_m1', rotation) = asymp_distr$m[2],
+      #                sprintf('r%d_asymp_s1', rotation) = asymp_distr$s[2],
+      #                sprintf('r%d_asymp_w1', rotation) = asymp_distr$w[2],
+      #                sprintf('r%d_roc_rate', rotation) = changerate_distr$rate,
+      #                sprintf('r%d_noise', rotation)    = exp_SD_distr$shape/exp_SD_distr$rate)
+      
+      
+      if (signal == 'adapt') {
+        fixed[sprintf('r%d_asymp_m0', rotation)] = asymp_distr$m[1]
+        fixed[sprintf('r%d_asymp_s0', rotation)] = asymp_distr$s[1]
+        fixed[sprintf('r%d_asymp_w0', rotation)] = asymp_distr$w[1]
+        pars[sprintf('r%d_asymp_m1', rotation)] = asymp_distr$m[2]
+        pars[sprintf('r%d_asymp_s1', rotation)] = asymp_distr$s[2]
+        fixed[sprintf('r%d_asymp_w1', rotation)] = asymp_distr$w[2]
+        
+      } else {
+        fixed[sprintf('r%d_asymp_m0', rotation)] = asymp_distr$m[1]
+        pars[ sprintf('r%d_asymp_s0', rotation)] = asymp_distr$s[1]
+        fixed[sprintf('r%d_asymp_w0', rotation)] = asymp_distr$w[1]
+        fixed[sprintf('r%d_asymp_m1', rotation)] = asymp_distr$m[2]
+        pars[ sprintf('r%d_asymp_s1', rotation)] = asymp_distr$s[2]
+        fixed[sprintf('r%d_asymp_w1', rotation)] = asymp_distr$w[2]
+        
+      }
+      
+      pars[sprintf('r%d_roc_rate', rotation)] = changerate_distr$rate
+      pars[sprintf('r%d_noise', rotation)]    = exp_SD_distr$shape/exp_SD_distr$rate
+      
+    }
+    
+  }
+  
+  return(list('pars'=unlist(pars), 'fixed'=unlist(fixed)))
+  
+}
+
+
+fitStepfunctionModel <- function(data, par, fixed) {
+  print(str(data))
+  print(length(par))
+  # print(par)
+  print(length(fixed))
+  # print(fixed)
+}
+
+fitExponentialModel <- function(data, par, fixed) {
+  print(str(data))
+  print(length(par))
+  # print(par)
+  print(length(fixed))
+  # print(fixed)
 }
