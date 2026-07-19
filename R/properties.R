@@ -1206,13 +1206,15 @@ plotExponentialAiming <- function(properties=NULL) {
         # - chi-squared
         # - log-normal
         
-        # # according to the python module 'distfit' these are better:
+        # # according to the python module 'distfit' these are better than exponential (the sixth one):
         #           name      score         loc  ... bootstrap_score bootstrap_pass    color
         # 0   genextreme   1.401856    0.067995  ...             0.0           None  #e41a1c
         # 1      lognorm     1.4072   -0.000895  ...             0.0           None  #e41a1c
         # 2       pareto   2.033844   -0.419678  ...             0.0           None  #377eb8
         # 3        gamma   2.619115        -0.0  ...             0.0           None  #4daf4a
-        # # but going with a single exponential for now: simple (1 parameter)
+        # # probably going with:
+        # - gamma (more similar to the other models, better fit)
+        # - exponential (simpler: just 1 parameter, but slightly worse fit) 
         
         # it does miss that there are a few people with a rate of 1
         # (hence the bi-modal and beta) but I guess very few people do this
@@ -1224,9 +1226,15 @@ plotExponentialAiming <- function(properties=NULL) {
         Y <- dexp(pvd$x, rate=expon_fit$estimate['rate'])
         lines(pvd$x, (Y/6)+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
         # print(expon_fit)
+
+        exp_5rate_d <- c(exp_5rate_d, dexp(propvals, rate=expon_fit$estimate['rate']))
         
-        exp_5rate_d <- c(exp_5rate_d, dexp(propvals, rate=one_expfit$estimate['rate']))
+        gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
+        Y <- dgamma(pvd$x, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
+        lines(pvd$x, 0.9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
         
+        
+
       }
       
       if (varname == 'aiming_exp_sd') {
