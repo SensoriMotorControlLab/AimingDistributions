@@ -492,7 +492,7 @@ getProbabilityDensities <- function(data, model) {
 
 # FIT the models? -----
 
-fitDistributionModels <- function(signal, model) {
+fitDistributionModel <- function(signal, model) {
   
   if (signal %in% c('aiming','adapt')) {
   } else {
@@ -509,9 +509,17 @@ fitDistributionModels <- function(signal, model) {
   startPar <- getStartingParameters(signal,model)
   
   if (model == 'stepfunction') {
-    fitpar <- fitStepfunctionModel(data=behavior, par=startPar$pars, fixed=startPar$fixed)
+    fitpar <- fitStepfunctionModel(data  = behavior, 
+                                   par   = startPar$pars, 
+                                   fixed = startPar$fixed,
+                                   lower = startPar$lower,
+                                   upper = startPar$upper)
   } else if (model == 'exponential') {
-    fitpar <- fitExponentialModel(data=behavior, par=startPar$pars, fixed=startPar$fixed)
+    fitpar <- fitExponentialModel(data  = behavior, 
+                                  par   = startPar$pars, 
+                                  fixed = startPar$fixed,
+                                  lower = startPar$lower,
+                                  upper = startPar$upper)
   }
 
 }
@@ -528,10 +536,12 @@ getStartingParameters <- function(signal, model) {
     cat('model must be either "stepfunction" or "exponential"\n')
   }
   
+  pars <- list()
+  lower <- c()
+  upper <- c()
+  fixed <- list()
+  
   if (model == 'stepfunction') {
-    
-    pars <- list()
-    fixed <- list()
     
     for (rotation in c(20,30,40,50,60)) {
       
@@ -554,27 +564,37 @@ getStartingParameters <- function(signal, model) {
         fixed[sprintf('r%d_asymp_s0',       rotation)] = asymp_distr$s[1]
         fixed[sprintf('r%d_asymp_w0',       rotation)] = asymp_distr$w[1]
         pars[sprintf('r%d_asymp_m1',       rotation)] = asymp_distr$m[2]
+        lower <- c(lower, 0)
+        upper <- c(upper, rotation+10)
         pars[sprintf('r%d_asymp_s1',       rotation)] = asymp_distr$s[2]
+        lower <- c(lower, .0001)
+        upper <- c(upper, Inf)
         fixed[sprintf('r%d_asymp_w1',       rotation)] = asymp_distr$w[2]
       } else {
         fixed[sprintf('r%d_asymp_m0',       rotation)] = asymp_distr$m[1]
         pars[ sprintf('r%d_asymp_s0',       rotation)] = asymp_distr$s[1]
+        lower <- c(lower, .0001)
+        upper <- c(upper, Inf)
         fixed[sprintf('r%d_asymp_w0',       rotation)] = asymp_distr$w[1]
         fixed[sprintf('r%d_asymp_m1',       rotation)] = asymp_distr$m[2]
         pars[ sprintf('r%d_asymp_s1',       rotation)] = asymp_distr$s[2]
+        lower <- c(lower, .0001)
+        upper <- c(upper, Inf)
         fixed[sprintf('r%d_asymp_w1',       rotation)] = asymp_distr$w[2]
       }
       pars[sprintf('r%d_steptime_rate',  rotation)] = step_time_distr$rate
+      lower <- c(lower, .0001)
+      upper <- c(upper, Inf)
       pars[sprintf('r%d_steptime_shape', rotation)] = step_time_distr$shape
+      lower <- c(lower, .1)
+      upper <- c(upper, Inf)
       pars[sprintf('r%d_noise',          rotation)] = step_SD_distr$shape/step_SD_distr$rate
-      
+      lower <- c(lower, .1)
+      upper <- c(upper, Inf)
     }
     
 
   } else if (model == 'exponential') {
-    
-    pars <- list()
-    fixed <- list()
     
     for (rotation in c(20,30,40,50,60)) {
       
@@ -614,43 +634,330 @@ getStartingParameters <- function(signal, model) {
         fixed[sprintf('r%d_asymp_s0', rotation)] = asymp_distr$s[1]
         fixed[sprintf('r%d_asymp_w0', rotation)] = asymp_distr$w[1]
         pars[sprintf('r%d_asymp_m1', rotation)] = asymp_distr$m[2]
+        lower <- c(lower, 0)
+        upper <- c(upper, rotation+10)
         pars[sprintf('r%d_asymp_s1', rotation)] = asymp_distr$s[2]
+        lower <- c(lower, .0001)
+        upper <- c(upper, Inf)
         fixed[sprintf('r%d_asymp_w1', rotation)] = asymp_distr$w[2]
         
       } else {
         fixed[sprintf('r%d_asymp_m0', rotation)] = asymp_distr$m[1]
         pars[ sprintf('r%d_asymp_s0', rotation)] = asymp_distr$s[1]
+        lower <- c(lower, .0001)
+        upper <- c(upper, Inf)
         fixed[sprintf('r%d_asymp_w0', rotation)] = asymp_distr$w[1]
         fixed[sprintf('r%d_asymp_m1', rotation)] = asymp_distr$m[2]
         pars[ sprintf('r%d_asymp_s1', rotation)] = asymp_distr$s[2]
+        lower <- c(lower, .0001)
+        upper <- c(upper, Inf)
         fixed[sprintf('r%d_asymp_w1', rotation)] = asymp_distr$w[2]
         
       }
       
       pars[sprintf('r%d_roc_rate', rotation)] = changerate_distr$rate
+      lower <- c(lower, .1)
+      upper <- c(upper, Inf)
       pars[sprintf('r%d_noise', rotation)]    = exp_SD_distr$shape/exp_SD_distr$rate
       
     }
     
   }
   
-  return(list('pars'=unlist(pars), 'fixed'=unlist(fixed)))
+  return(list( 'pars'  = unlist(pars), 
+               'fixed' = unlist(fixed), 
+               'lower' = lower, 
+               'upper' = upper))
   
 }
 
+### stepfunction specific ----
 
-fitStepfunctionModel <- function(data, par, fixed) {
-  print(str(data))
-  print(length(par))
-  # print(par)
-  print(length(fixed))
-  # print(fixed)
+fitStepfunctionModel <- function(data, par, fixed, lower=NULL, upper=NULL) {
+  
+  if (!is.null(lower) & !is.null(upper)) {
+    out <- optim( par = par, 
+                  NLLstepfunctionModel,
+                  method = "L-BFGS-B",
+                  lower = lower,
+                  upper = upper,
+                  data = data,
+                  fixed = fixed
+    )
+  } else {
+    out <- optim( par = par, 
+                  NLLstepfunctionModel,
+                  method = "BFGS",
+                  data = data,
+                  fixed = fixed
+    )
+  }
+  
+  out$fixed <- fixed
+  
+  return(out)
+  
 }
 
-fitExponentialModel <- function(data, par, fixed) {
-  print(str(data))
-  print(length(par))
-  # print(par)
-  print(length(fixed))
-  # print(fixed)
+NLLstepfunctionModel <- function(par, data, fixed=NULL, n_simulations=20000) {
+  
+  # combine the fixed and free parameters into one list
+  if (!is.null(fixed)) {
+    all_pars <- c(par, fixed)
+  } else {
+    all_pars <- par
+  }
+
+  probdens <- c()
+  
+  # print(str(data))
+  
+  for (rotation in c(20,30,40,50,60)) {
+    
+    rot_pars <- all_pars[grep(sprintf('r%d_', rotation), names(all_pars))]
+    
+    # cat('read from here:\n')
+    names(rot_pars) <- substr(names(rot_pars), 5, nchar(names(rot_pars)))
+    # print(rot_pars)
+    model <- simulateStepfunctionModel( par           = rot_pars,
+                                        n_simulations = n_simulations)
+    # print(str(model))
+    probdens <- c(probdens, getProbabilityDensities(data[[sprintf('%d',rotation)]], model))
+    
+  }
+  
+  negLogLik <- Reach::nll(probdens)
+  cat(sprintf('negLogLik: %.2f\n', negLogLik))
+  return(negLogLik)
+  
+}
+
+simulateStepfunctionModel <- function( par, n_simulations = 20000) {
+  
+  # unpack the parameters:
+  asymp_m1 <- par['asymp_m0']
+  asymp_s1 <- par['asymp_s0']
+  asymp_w1 <- par['asymp_w0']
+  
+  asymp_m2 <- par['asymp_m1']
+  asymp_s2 <- par['asymp_s1']
+  asymp_w2 <- par['asymp_w1']
+  
+  steptime_rate  <- par['steptime_rate']
+  steptime_shape <- par['steptime_shape']
+  
+  noise          <- par['noise']
+  
+  
+
+  trials <- 120 # should this be a parameter as well?
+  
+  # Create a matrix to store the results
+  results <- matrix(0, nrow = n_simulations, ncol = trials)
+  
+  # step or no step?
+  if (asymp_w1 == 0) {
+    mode <- rep(2, n_simulations) # for now, just use the above-0 asymptote mode)
+  } else {
+    mode <- as.integer( runif(n_simulations) > asymp_w1 ) + 1
+  }
+  
+  # step sizes (0 for no step):
+  step_sizes <- rep(0, n_simulations)
+  if (any(mode == 1)) {
+    step_sizes[mode == 1] <- rnorm(sum(mode == 1), mean = asymp_m1, sd = asymp_s1)
+  }
+  # step_sizes[mode == 1] <- 0
+  step_sizes[mode == 2] <- rnorm(sum(mode == 2), mean = asymp_m2, sd = asymp_s2)
+  
+  # step times (NA for no step - should not be used later on, which will throw errors):
+  step_times <- rep(NA, n_simulations)
+  
+  # this was to catch a few NAs from rgamma, but apparently,
+  # there are either none, or all of them are NA
+  # N_times <- length(step_times[mode == 2])
+  # m2st    <- rep(NA, N_times) 
+  # while (any(is.na(m2st))) {
+  #   m2st[is.na(m2st)] <- ceiling(rgamma( n = sum(is.na(m2st)), 
+  #                                        shape = steptime_shape, 
+  #                                        rate = steptime_rate))
+  # }
+  # 
+  # step_times[mode == 2] <- m2st
+  
+  step_times[mode == 2] <- ceiling(rgamma( n=sum(mode == 2),
+                                           shape = steptime_shape,
+                                           rate  = steptime_rate ) )
+  
+  # if gamma returns NAs, we make the step time, the latest possible
+  # and increase the noise, so that the model can still fit the dat
+  # but returns low likelihoods, so that the optimizer can find a better solution
+  if (any(is.na(step_times[mode == 2]))) {
+    step_times[mode == 2] <- trials
+    noise <- 999999
+  }
+  
+  step_times[which(step_times > trials)] <- trials
+  
+  # # simple model has just one level of noise throughout:
+  # step_SD <- rgamma(n=n_simulations, shape=step_SD_distr$shape, rate=step_SD_distr$rate)
+  # 
+  # rand_noise <- matrix( rnorm(n=trials*n_simulations,
+  #                             mean=0,
+  #                             sd=rep(step_SD,each=trials)), # same SD for all trials in a simulated participant 
+  #                       nrow=n_simulations,
+  #                       ncol=trials,
+  #                       byrow = TRUE) 
+  rand_noise <- matrix( rnorm(n=trials*n_simulations,
+                              mean=0,
+                              sd=noise), # same SD for all trials in a simulated participant
+                        nrow=n_simulations,
+                        ncol=trials,
+                        byrow = TRUE)
+  
+  # steps are added in a loop... can't think of a better way right now
+  if (any(mode == 2)){
+    for (idx in which(mode == 2)) {
+      # print(step_times[idx])
+      # cat(sprintf('idx: %d, step_time: %d, step_size: %.2f\n', idx, step_times[idx], step_sizes[idx]))
+      results[idx,c(max(1, step_times[idx]):trials)] <- step_sizes[idx]
+    }
+  }
+  # noise is added in one go:
+  responses <- results + rand_noise
+  
+  return(responses)
+  
+}
+
+### exponential specific -----
+
+fitExponentialModel <- function(data, par, fixed, lower=NULL, upper=NULL) {
+  
+  if (!is.null(lower) & !is.null(upper)) {
+    out <- optim( par = par, 
+                  NLLexponentialModel,
+                  method = "L-BFGS-B",
+                  lower = lower,
+                  upper = upper,
+                  data = data,
+                  fixed = fixed
+    )
+  } else {
+    out <- optim( par = par, 
+                  NLLexponentialModel,
+                  method = "BFGS",
+                  data = data,
+                  fixed = fixed
+    )
+  }
+  
+  out$fixed = fixed
+  
+  return(out)
+  
+}
+
+NLLexponentialModel <- function(par, data, fixed=NULL, n_simulations=20000) {
+  
+  # combine the fixed and free parameters into one list
+  if (!is.null(fixed)) {
+    all_pars <- c(par, fixed)
+  } else {
+    all_pars <- par
+  }
+  
+  probdens <- c()
+  
+  for (rotation in c(20,30,40,50,60)) {
+    
+    rot_pars <- all_pars[grep(sprintf('r%d_', rotation), names(all_pars))]
+    
+    # cat('read from here:\n')
+    names(rot_pars) <- substr(names(rot_pars), 5, nchar(names(rot_pars)))
+    
+    model <- simulateExponentialModel( par           = rot_pars,
+                                       n_simulations = n_simulations)
+    
+    probdens <- c(probdens, getProbabilityDensities(data[[sprintf('%d',rotation)]], model))
+    
+  }
+  
+  negLogLik <- Reach::nll(probdens)
+  cat(sprintf('negLogLik: %.2f\n', negLogLik))
+  return(negLogLik)
+  
+}
+
+simulateExponentialModel <- function( par, n_simulations = 20000) {
+ 
+  # unpack the parameters:
+  asymp_m1 <- par['asymp_m0']
+  asymp_s1 <- par['asymp_s0']
+  asymp_w1 <- par['asymp_w0']
+  
+  asymp_m2 <- par['asymp_m1']
+  asymp_s2 <- par['asymp_s1']
+  asymp_w2 <- par['asymp_w1']
+  
+  roc_rate <- par['roc_rate']
+
+  noise    <- par['noise']
+  
+  trials <- 120
+  
+  # Create a matrix to store the results
+  results <- matrix(0, nrow = n_simulations, ncol = trials)
+  
+  # ~0 asymptote (1) or above-0 asymptote (2)?
+  if (asymp_w1 == 0) {
+    mode <- rep(2, n_simulations) # for now, just use the above-0 asymptote mode)
+  } else {
+    mode <- as.integer( runif(n_simulations) > asymp_w1 ) + 1
+  }
+  
+  # asymptotes:
+  asymptotes <- rep(0, n_simulations)
+  asymptotes[mode == 1] <- rnorm(sum(mode == 1), mean = asymp_m1, sd = asymp_s1)
+  asymptotes[mode == 2] <- rnorm(sum(mode == 2), mean = asymp_m2, sd = asymp_s2)
+  
+  # print(length(which(asymptotes <= 0)))
+  
+  # step sizes (0 for no step):
+  change_rates <- rexp(n = n_simulations, rate = roc_rate)
+  # cat(sprintf("percentage change rates > 1: %0.1f\n", 100*sum(change_rates > 1)/length(change_rates))) 
+  change_rates[which(change_rates > 1)] <- 1 # cap at 1, otherwise the exponential function will overshoot the asymptote
+  
+  change_rates[which(change_rates < 0.01)] <- 0.01 # cap at 0, otherwise the exponential function will undershoot the asymptote]
+  # print(sort(change_rates)[1:100])
+  
+  rellevels <- mapply(function(r,t) {r^t}, change_rates, matrix(rep(c(0:(trials-1)), each=length(change_rates)), ncol=trials,nrow=length(change_rates)))
+  curves <- 1 - matrix(rellevels, nrow=length(change_rates))
+  
+  # multiply each row of curves with the asymptote of that simulated participant
+  curves <- curves * matrix(rep(asymptotes, each=trials), nrow=n_simulations, ncol=trials)
+  
+  
+  # figure out the noise:
+  # exp_SD <- rgamma(n=n_simulations, shape=exp_SD_distr$shape, rate=exp_SD_distr$rate)
+  # 
+  # noise <- matrix(rnorm(n=trials*n_simulations,
+  #                       mean=0,
+  #                       sd=rep(exp_SD,each=trials)), # same SD for all trials in a simulated participant
+  #                 nrow=n_simulations,
+  #                 ncol=trials,
+  #                 byrow = TRUE)
+  
+  rand_noise <- matrix( rnorm(n    = trials*n_simulations,
+                              mean = 0,
+                              sd   = noise), # same SD for all participants and trials
+                        nrow=n_simulations,
+                        ncol=trials,
+                        byrow = TRUE)
+  
+  # add noise to the curves:
+  responses <- curves + rand_noise
+  
+  return(responses)
+   
 }
