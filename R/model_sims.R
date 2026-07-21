@@ -955,18 +955,19 @@ getStartingParameters <- function(signal, model) {
 fitStepfunctionModel <- function(data, par, fixed, lower=NULL, upper=NULL) {
   
   
-  # nlm     WORKS
-  # nlminb  WORKS
-  # spg     doesn't work
-  # ucminf  WORKS
-  # newuoa  WORKS
-  # bobyqa  WORKS
-  # nmkb    doesn't work
-  # hjkb    doesn't work
-  # Rcgmin  WORKS... or not?
-  # Rvmmin  WORKS
+  # nlm     WORKS (no constraints)
+  # nlminb  WORKS (box constraints)
+  # spg     doesn't work (has 'simple' constraints)
+  # ucminf  WORKS (no constraints) comes from separate package
+  # newuoa  is for unconstrained fitting
+  # bobyqa  WORKS (and has constraints)
+  # nmkb    doesn't work (package not installed)
+  # hjkb    doesn't work (package not installed)
+  # Rcgmin  WORKS... or not? (supposedly has constraints, from separate package)
+  # Rvmmin  WORKS? maybe (not sure if it has constraints... probably from separate package... not available for this version of R)
   
-  # methods <- c("nlm", "nlminb", "ucminf", "newuoa", "bobyqa")
+  # methods <- c("L-BFGS-B", "nlminb", "bobyqa") #, "Rcgmin", "Rvmmin")
+  
   methods <- "L-BFGS-B"
   
   if (!is.null(lower) & !is.null(upper)) {
