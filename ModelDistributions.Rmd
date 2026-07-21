@@ -3,8 +3,9 @@ title: "Model Distributions"
 author: "Marius 't Hart"
 date: "2026-07-16"
 output:
-  pdf_document: default
+  word_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -13,6 +14,14 @@ source('R/model_sims.R')
 ```
 
 ## Model Distributions
+
+First we have the simulations for all 4 cases: for both aiming and adaptation we run the stepfunction and exponential style models.
+
+```{r save_simulations, eval=FALSE}
+saveSimulations()
+```
+
+This stores the parameters as well, but not the NLL. Anyways, now we can plot them.
 
 Here are the data and model distributions for adaptation:
 
