@@ -1114,21 +1114,33 @@ plotExponentialAiming <- function(properties=NULL) {
     if (varname == 'aiming_exp_changerate') {
       propvals <- properties[, varname]
       propvals <- propvals[which(!is.na(propvals))]
-      print(min(propvals))
+      # print(min(propvals))
+      propvals[which(propvals < .Machine$double.eps)] <- .Machine$double.eps
       # exp_rate_fitpar <- Reach::multiModalFit(x=propvals, n=2, points=7, best=4)
       # print(exp_rate_fitpar)
       # exp_rate_d <- Reach::multiModalModel(propvals, par=exp_rate_fitpar)
       # exp_5rate_d <- c()
       
-      one_expfit <- MASS::fitdistr(propvals, densfun = "exponential")
-      exp_1rate_d <- dexp(propvals, rate=one_expfit$estimate['rate'])
-      exp_5rate_d <- c()
+      # one_expfit <- MASS::fitdistr(propvals, densfun = "exponential")
+      # exp_1rate_d <- dexp(propvals, rate=one_expfit$estimate['rate'])
+      # exp_5rate_d <- c()
+      # 
+      # rotation <- c(20,30,40,50,60)
+      # rate     <- rep(one_expfit$estimate['rate'], 5)
+      # 
+      # write.csv(data.frame(rotation=rotation, rate=rate), 
+      #           file='data/distributions/aiming_exp_changerate_exponential_parameter.csv', row.names=FALSE)
+
+      one_gammafit <- MASS::fitdistr(propvals, densfun = "gamma", lower=c(1.001, 0.001), upper=c(Inf,Inf))
+      gamma_1roc_d <- dgamma(propvals, rate=one_gammafit$estimate['rate'], shape=one_gammafit$estimate['shape'])
+      gamma_5roc_d <- c()
       
       rotation <- c(20,30,40,50,60)
-      rate     <- rep(one_expfit$estimate['rate'], 5)
+      rate     <- rep(one_gammafit$estimate['rate'], 5)
+      shape    <- rep(one_gammafit$estimate['shape'], 5)
       
-      write.csv(data.frame(rotation=rotation, rate=rate), 
-                file='data/distributions/aiming_exp_changerate_exponential_parameter.csv', row.names=FALSE)
+      write.csv(data.frame(rotation=rotation, rate=rate, shape=shape), 
+                file='data/distributions/aiming_exp_changerate_gamma_parameter.csv', row.names=FALSE)
       
     }
     
@@ -1155,6 +1167,9 @@ plotExponentialAiming <- function(properties=NULL) {
         propvals <- properties[which(  properties$rotation == rot
                                      # & properties$aiming_exp_changerate < 0.99
                                      ), varname]
+        propvals <- propvals[which(!is.na(propvals))]
+        propvals[which(propvals < .Machine$double.eps)] <- .Machine$double.eps
+        
       } else {
         propvals <- properties[which(properties$rotation == rot), varname]
       }
@@ -1169,11 +1184,12 @@ plotExponentialAiming <- function(properties=NULL) {
 
       pvd <- density(propvals, na.rm=TRUE, bw=bw,
                      n = 300, from=min(xrange), to=max(xrange))
-      if (varname == 'aiming_exp_changerate') {
-        lines(pvd$x, (pvd$y/6)+rot_idx-0.45, col=rot_idx)
-      } else {
-        lines(pvd$x, .9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
-      }
+      # if (varname == 'aiming_exp_changerate') {
+      #   lines(pvd$x, (pvd$y/6)+rot_idx-0.45, col=rot_idx)
+      # } else {
+      #   lines(pvd$x, .9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
+      # }
+      lines(pvd$x, .9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
       
       points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
       
@@ -1222,17 +1238,18 @@ plotExponentialAiming <- function(properties=NULL) {
         # those might be stepwise in trial 1 - with high asymptotes?
         # not going to worry about it
         
-        expon_fit <- MASS::fitdistr(propvals, densfun = "exponential")
-        Y <- dexp(pvd$x, rate=expon_fit$estimate['rate'])
-        lines(pvd$x, (Y/6)+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        # expon_fit <- MASS::fitdistr(propvals, densfun = "exponential")
+        # Y <- dexp(pvd$x, rate=expon_fit$estimate['rate'])
+        # lines(pvd$x, (Y/6)+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
         # print(expon_fit)
 
-        exp_5rate_d <- c(exp_5rate_d, dexp(propvals, rate=expon_fit$estimate['rate']))
+        # exp_5rate_d <- c(exp_5rate_d, dexp(propvals, rate=expon_fit$estimate['rate']))
         
-        gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma")
+        gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", lower=c(1.001, 0.001), upper=c(Inf,Inf))
         Y <- dgamma(pvd$x, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
         lines(pvd$x, 0.9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
         
+        gamma_5roc_d <- c(gamma_5roc_d, dgamma(propvals, rate=gamma_fit$estimate['rate'], shape=gamma_fit$estimate['shape']))
         
 
       }
@@ -1273,8 +1290,8 @@ plotExponentialAiming <- function(properties=NULL) {
               Reach::AIC(logLik=-1*Reach::nll(asymp_5_d), k=25, N=length(asymp_5_d))))
   
   cat(sprintf('\n1 exponential change-rate AIC: %0.1f, 5 exponential rate AIC: %0.1f\n', 
-              Reach::AIC(logLik=-1*Reach::nll(exp_1rate_d), k=1, N=length(exp_1rate_d)), 
-              Reach::AIC(logLik=-1*Reach::nll(exp_5rate_d), k=5, N=length(exp_5rate_d))))
+              Reach::AIC(logLik=-1*Reach::nll(gamma_1roc_d), k=1, N=length(gamma_1roc_d)), 
+              Reach::AIC(logLik=-1*Reach::nll(gamma_5roc_d), k=5, N=length(gamma_5roc_d))))
   
   cat(sprintf('\n1 gamma SD AIC: %0.1f, 5 gamma SD AIC: %0.1f\n', 
               Reach::AIC(logLik=-1*Reach::nll(exp_sd_1gamma_d), k=2, N=length(exp_sd_1gamma_d)), 
@@ -1326,16 +1343,18 @@ plotExponentialAdaptation <- function(properties=NULL) {
     if (varname == 'adapt_exp_changerate') {
       propvals <- properties[, varname]
       propvals <- propvals[which(!is.na(propvals))]
-
-      one_expfit <- MASS::fitdistr(propvals, densfun = "exponential")
-      exp_1rate_d <- dexp(propvals, rate=one_expfit$estimate['rate'])
-      exp_5rate_d <- c()
+      propvals[which(propvals < .Machine$double.eps)] <- .Machine$double.eps
+      
+      one_gammafit <- MASS::fitdistr(propvals, densfun = "gamma", lower=c(1.001, 0.001), upper=c(Inf,Inf))
+      gamma_1roc_d <- dgamma(propvals, rate=one_gammafit$estimate['rate'], shape=one_gammafit$estimate['shape'])
+      gamma_5roc_d <- c()
       
       rotation <- c(20,30,40,50,60)
-      rate     <- rep(one_expfit$estimate['rate'], 5)
+      rate     <- rep(one_gammafit$estimate['rate'], 5)
+      shape    <- rep(one_gammafit$estimate['shape'], 5)
       
-      write.csv(data.frame(rotation=rotation, rate=rate), 
-                file='data/distributions/adapt_exp_changerate_exponential_parameter.csv', row.names=FALSE)
+      write.csv(data.frame(rotation=rotation, rate=rate, shape=shape), 
+                file='data/distributions/adapt_exp_changerate_gamma_parameter.csv', row.names=FALSE)
       
     }
     
@@ -1415,6 +1434,9 @@ plotExponentialAdaptation <- function(properties=NULL) {
       
       if (varname == 'adapt_exp_changerate') {
         
+        propvals <- propvals[which(!is.na(propvals))]
+        propvals[which(propvals < .Machine$double.eps)] <- .Machine$double.eps
+        
         # tried distributions:
         # - bi-modal
         # - beta
@@ -1428,12 +1450,18 @@ plotExponentialAdaptation <- function(properties=NULL) {
         # (hence the bi-modal and beta) but I guess very few people do this
         # they might be stepwise in trial 1
         
-        expon_fit <- MASS::fitdistr(propvals, densfun = "exponential")
-        Y <- dexp(pvd$x, rate=expon_fit$estimate['rate'])
-        lines(pvd$x, (Y/6)+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
-        # print(expon_fit)
+        # expon_fit <- MASS::fitdistr(propvals, densfun = "exponential")
+        # Y <- dexp(pvd$x, rate=expon_fit$estimate['rate'])
+        # lines(pvd$x, (Y/6)+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        # # print(expon_fit)
+        # 
+        # exp_5rate_d <- c(exp_5rate_d, dexp(propvals, rate=one_expfit$estimate['rate']))
         
-        exp_5rate_d <- c(exp_5rate_d, dexp(propvals, rate=one_expfit$estimate['rate']))
+        gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", lower=c(1.001, 0.001), upper=c(Inf,Inf))
+        Y <- dgamma(pvd$x, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
+        lines(pvd$x, 0.9*(Y/max(Y))+rot_idx-0.45, col=rot_idx, lw=1, lty=2)
+        
+        gamma_5roc_d <- c(gamma_5roc_d, dgamma(propvals, rate=gamma_fit$estimate['rate'], shape=gamma_fit$estimate['shape']))
         
       }
       
@@ -1471,12 +1499,12 @@ plotExponentialAdaptation <- function(properties=NULL) {
   }
   
   cat(sprintf('\n1 normal asymptote AIC: %0.1f, 5 normal asymptote AIC: %0.1f\n', 
-              Reach::AIC(logLik=-1*Reach::nll(asymp_1_d), k=5, N=length(asymp_1_d)), 
-              Reach::AIC(logLik=-1*Reach::nll(asymp_5_d), k=25, N=length(asymp_5_d))))
+              Reach::AIC(logLik=-1*Reach::nll(asymp_1_d), k=2, N=length(asymp_1_d)), 
+              Reach::AIC(logLik=-1*Reach::nll(asymp_5_d), k=10, N=length(asymp_5_d))))
   
-  cat(sprintf('\n1 exponential change-rate AIC: %0.1f, 5 exponential rate AIC: %0.1f\n', 
-              Reach::AIC(logLik=-1*Reach::nll(exp_1rate_d), k=1, N=length(exp_1rate_d)), 
-              Reach::AIC(logLik=-1*Reach::nll(exp_5rate_d), k=5, N=length(exp_5rate_d))))
+  cat(sprintf('\n1 gamma change-rate AIC: %0.1f, 5 gamma rate AIC: %0.1f\n', 
+              Reach::AIC(logLik=-1*Reach::nll(gamma_1roc_d), k=2, N=length(gamma_1roc_d)), 
+              Reach::AIC(logLik=-1*Reach::nll(gamma_5roc_d), k=10, N=length(gamma_5roc_d))))
   
   cat(sprintf('\n1 gamma SD AIC: %0.1f, 5 gamma SD AIC: %0.1f\n', 
               Reach::AIC(logLik=-1*Reach::nll(exp_sd_1gamma_d), k=2, N=length(exp_sd_1gamma_d)), 
