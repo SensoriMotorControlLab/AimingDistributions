@@ -1150,6 +1150,8 @@ simulateStepfunctionModel <- function( par, n_simulations = 20000) {
 
 fitExponentialModel <- function(data, par, fixed, lower=NULL, upper=NULL) {
   
+  # see fitStepfunctionModel for notes on other methods
+  
   # methods <- c("nlm", "nlminb", "ucminf", "newuoa", "bobyqa")
   methods <- "L-BFGS-B"
   
