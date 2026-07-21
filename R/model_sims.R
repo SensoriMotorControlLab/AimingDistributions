@@ -1,7 +1,8 @@
 
 # initial parameters -----
 
-## STEP FUNCTION simulations -----
+## OUTDATED functions: -----
+### [STEP FUNCTION simulations] -----
 
 generateSimpleStepfunctionDistribution <- function(signal) {
   
@@ -101,7 +102,7 @@ bootstrapStepWiseModel <- function(step_size_distr, step_time_distr, step_SD_dis
   
 }
 
-## EXPONENTIAL FUNCTION simulations -----
+### [EXPONENTIAL FUNCTION simulations] -----
 
 generateExponentialFunctionDistribution <- function(signal) {
   
@@ -264,6 +265,10 @@ readData <- function(signal) {
 
 }
 
+
+
+
+
 plotDataAndFits <- function(signal='aiming') {
   
   if (signal %in% c('aiming','adapt')) {
@@ -272,8 +277,13 @@ plotDataAndFits <- function(signal='aiming') {
   }
   
   behavior <- readData(signal)
-  stepfunction <- readRDS(sprintf('data/simulations/%s_stepfunction_simulations.rds', signal))
-  exponential <- readRDS(sprintf('data/simulations/%s_exponential_simulations.rds', signal))
+  
+  simulations <- readRDS('data/simulations/initial_model_simulations.rds')
+  
+  # stepfunction <- readRDS(sprintf('data/simulations/%s_stepfunction_simulations.rds', signal))
+  stepfunction <- simulations[[signal]][['stepfunction']][['simulations']]
+  # exponential <- readRDS(sprintf('data/simulations/%s_exponential_simulations.rds', signal))
+  exponential <- simulations[[signal]][['exponential']][['simulations']]
   
   step_d <- c()
   exp_d  <- c()
@@ -335,8 +345,9 @@ plotDataAndFits <- function(signal='aiming') {
     # image(x=x, y=y,
     #       z=t(get2Dcounts(matrix=exponential[[as.character(rotation)]])), 
     #       add=TRUE, axes=FALSE )
+    
     image(x=x, y=yd,
-          z=t(get2Ddensity(matrix=exponential[[as.character(rotation)]])), 
+          z=t(get2Ddensity(matrix=exponential[[as.character(rotation)]])),
           add=TRUE, axes=FALSE, col=blueramp )
     
     # plot the step-function simulations
@@ -386,20 +397,151 @@ get2Dcounts <- function(matrix, from=-10, to=70, n=20) {
 }
 
 
-get2Ddensity <- function(matrix, from=-10, to=70, n=160) {
+get2Ddensity <- function(matrix, from=-10, to=70, n=160, bw=1) {
   
   breaks <- seq(from,to,(to - from)/n)
   
   output <- matrix(NA, nrow=n, ncol=ncol(matrix)) 
   
+  # print(str(matrix))
+  
   for (col_idx in 1:ncol(matrix)) {
     data <- matrix[,col_idx]
+    # print(summary(data))
     data <- data[data >= from & data < to]
     # output[,col_idx] <- hist(data, breaks=breaks, plot=FALSE)$counts
-    output[,col_idx] <- density(data, from=from, to=to, n=n)$y
+    output[,col_idx] <- density(data, from=from, to=to, n=n, bw=bw)$y
   }
   
   return(output^.5)
+  
+}
+
+
+saveSimulations <- function() {
+  
+  
+  simulations <- list()
+  
+  for (signal in c('aiming', 'adapt')) {
+    
+    simulations[[signal]] <- list()
+    
+    for (model in c('stepfunction', 'exponential')) {
+      
+      simulations[[signal]][[model]] <- list()
+      
+      startPars <- getStartingParameters(signal, model)
+      
+      if (model == 'stepfunction') {
+        out <- getStepfunctionSimulations( par   = startPars$pars,
+                                           fixed = startPars$fixed,
+                                           n_simulations = 20000)
+      } else if (model == 'exponential') {
+        out <- getExponentialSimulations( par   = startPars$pars,
+                                          fixed = startPars$fixed,
+                                          n_simulations = 20000)
+      }
+      
+      simulations[[signal]][[model]][['simulations']] <- out
+      simulations[[signal]][[model]][['parameters']] <- startPars
+      
+    }
+    
+    
+  }
+  
+  saveRDS(simulations, file = 'data/simulations/initial_model_simulations.rds')
+  
+}
+
+
+getStepfunctionSimulations <- function(par, fixed=NULL, n_simulations=20000) {
+  
+  # combine the fixed and free parameters into one list
+  if (!is.null(fixed)) {
+    all_pars <- c(par, fixed)
+  } else {
+    all_pars <- par
+  }
+  
+  gen_idx <- grep('all_', names(all_pars))
+  gen_pars <- all_pars[gen_idx]
+  names(gen_pars) <- substr(names(gen_pars), 5, nchar(names(gen_pars)))
+  
+  # the simulations use lots of random numbers, which makes the model
+  # a bit, well "random"... to make it more stable by setting the rng seed here 
+  # that way, the same "random" numbers are used in each run of the model
+  set.seed(37331)
+  
+  out <- list()
+  
+  for (rotation in c(20,30,40,50,60)) {
+    
+    rot_idx <- grep(sprintf('r%d_', rotation), names(all_pars))
+    rot_pars <- all_pars[rot_idx]
+    # rot_pars <- all_pars[grep(sprintf('r%d_', rotation), names(all_pars))]
+    
+    # cat('read from here:\n')
+    names(rot_pars) <- substr(names(rot_pars), 5, nchar(names(rot_pars)))
+    # print(rot_pars)
+    
+    model <- simulateStepfunctionModel( par           = c(gen_pars, rot_pars),
+                                        n_simulations = n_simulations)
+    
+    print(str(model))
+    
+    out[[as.character(rotation)]] <- model
+    
+  }
+  
+  cat('done?\n')
+  return(out)
+  
+}
+
+getExponentialSimulations <- function(par, fixed=NULL, n_simulations=5000) {
+  
+  # combine the fixed and free parameters into one list
+  if (!is.null(fixed)) {
+    all_pars <- c(par, fixed)
+  } else {
+    all_pars <- par
+  }
+  
+  gen_idx <- grep('all_', names(all_pars))
+  gen_pars <- all_pars[gen_idx]
+  names(gen_pars) <- substr(names(gen_pars), 5, nchar(names(gen_pars)))
+  
+  # the simulations use lots of random numbers, which makes the model
+  # a bit, well "random"... to make it more stable by setting the rng seed here 
+  # that way, the same "random" numbers are used in each run of the model
+  set.seed(37331)
+  
+  out <- list()
+  
+  for (rotation in c(20,30,40,50,60)) {
+    
+    rot_idx <- grep(sprintf('r%d_', rotation), names(all_pars))
+    rot_pars <- all_pars[rot_idx]
+    # rot_pars <- all_pars[grep(sprintf('r%d_', rotation), names(all_pars))]
+    
+    # cat('read from here:\n')
+    names(rot_pars) <- substr(names(rot_pars), 5, nchar(names(rot_pars)))
+    # print(rot_pars)
+    
+    model <- simulateExponentialModel( par           = c(gen_pars, rot_pars),
+                                        n_simulations = n_simulations)
+    
+    print(str(model))
+    
+    out[[as.character(rotation)]] <- model
+    
+  }
+  
+  cat('done?\n')
+  
+  return(out)
   
 }
 
@@ -538,6 +680,45 @@ getProbabilityDensities <- function(data, model, bw=.5) {
 }
 
 # FIT the models? -----
+
+initialFits <- function() {
+  
+  signal <- c()
+  model  <- c()
+  nll    <- c()
+  AIC    <- c()
+  
+  for (sig in c('aiming', 'adapt')) {
+    behavior <- readData(sig)
+    for (mod in c('stepfunction', 'exponential')) {
+      startPar <- getStartingParameters(sig,mod)
+      
+      if (mod == 'stepfunction') {
+        out <- NLLstepfunctionModel(data  = behavior, 
+                                    par   = startPar$pars, 
+                                    fixed = startPar$fixed,
+                                    n_simulations=20000)
+      } else if (mod == 'exponential') {
+        out <- NLLexponentialModel(data  = behavior, 
+                                   par   = startPar$pars, 
+                                   fixed = startPar$fixed,
+                                   n_simulations=20000)
+      }
+      signal <- c(signal, sig)
+      model  <- c(model, mod)
+      nll    <- c(nll, out)
+      AIC    <- c(AIC, Reach::AIC(logLik = -1*out, k = length(startPar$pars), N=120*200))
+    }
+  }
+  
+  write.csv(data.frame(signal=signal, model=model, nll=nll),
+            file='data/fits/initial_model_fits.csv', row.names=FALSE)
+  
+}
+
+
+# optimize the model parameters? -----
+# we could still reduce some of the parameters:
 
 fitModels <- function() {
   
@@ -844,7 +1025,6 @@ NLLstepfunctionModel <- function(par, data, fixed=NULL, n_simulations=5000) {
     names(rot_pars) <- substr(names(rot_pars), 5, nchar(names(rot_pars)))
     # print(rot_pars)
     
-    lo <- 
     model <- simulateStepfunctionModel( par           = c(gen_pars, rot_pars),
                                         n_simulations = n_simulations)
     
@@ -996,7 +1176,7 @@ fitExponentialModel <- function(data, par, fixed, lower=NULL, upper=NULL) {
   
 }
 
-NLLexponentialModel <- function(par, data, fixed=NULL, n_simulations=20000) {
+NLLexponentialModel <- function(par, data, fixed=NULL, n_simulations=5000) {
   
   # combine the fixed and free parameters into one list
   if (!is.null(fixed)) {
@@ -1023,12 +1203,9 @@ NLLexponentialModel <- function(par, data, fixed=NULL, n_simulations=20000) {
     model <- simulateExponentialModel( par           = c(gen_pars, rot_pars),
                                        n_simulations = n_simulations)
     
-    noise <- c(gen_pars, rot_pars)['noise']
-    
     probdens <- c(probdens, 
                   getProbabilityDensities(data[[sprintf('%d',rotation)]], 
-                                          model,
-                                          noise=noise))
+                                          model))
     
   }
   
