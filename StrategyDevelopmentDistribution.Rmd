@@ -134,7 +134,9 @@ Now we just need to look at the standard deviations of pre- and post-step interv
 plotAimingStepSD()
 ```
 
-Separate gamma functions for each of the five rotations seems to work better in all cases, so we will use that.
+Separate noise levels for each of the five rotations seems to work better in all cases, so we will use that.
+
+We could draw noise SD for each participant at random from a gamma distribution, but for simplicity we can just use the average of the fitted gamma distribution.
 
 #### Adaptation Step-time and Step-size
 
@@ -323,6 +325,26 @@ We could also build an exponential model, which would have these properties:
 
 Presumably, the exponential distributions will not work well at all, and either the stepwise or expanded stepwise models will be the best. This remains to be tested though.
 
+Let's have a look at the exponential approach to modeling aiming:
+
+```{r exp_aiming_plot, fig.width=7, fig.height=7}
+plotExponentialAiming()
+```
+
+
+And the exponential approach to adaptation:
+
+```{r exp_adapt_plot, fig.width=7, fig.height=7}
+plotExponentialAdaptation()
+```
+
+We (obviously) need 5 different asymptote levels (although maybe they could be expressed as a proportion of the rotation, and remain constant that way).
+
+The rate of change could be the same across rotations, and a gamma distribution fits a bit better according to distfit, so still need to change this.
+
+The SD is probably a function of rotation size as well, although both the mean and SD of the distribution the noise level is drawn from seem to scale with rotation size, so we could simplify that in the future.
+
+
 ## Adaptation models?
 
 At least for the stepwise and exponential distribution models, we could fit them to the adaptation curves, and see which of the two explains the data best. Presumable, the exponential model will fit best here. This would demonstrate that overall adaptation and explicit strategy development are not the same type of process.
@@ -333,6 +355,29 @@ Let's first do the simplest of the two models. It's based on 3 files, each with 
 
 Each rotation size gets simulated separately, the goals is to use at least 15k runs. The smallest proportion people in any split is the no-strategy probability in the stepwise approach at 60 degrees with 0.07686916 of participants. If we want at least a 1000 runs in any situations, we'd need 1000/0.07686916 = ~13k runs, but 15k is a little safer.
 
+## Model fitting
 
+The initial model fitting used optim with L-BFGS-B, which essentially returned the starting parameters, but also did not return the lowest negative log-likelihood that was evaluated.
 
+So perhaps this means the starting parameters were already very close to optimal (which they were chosen to be), or the method couldn't handle the model. So we should try out some other methods of optimization. For example, using optimx.
 
+Here are all the optimx methods allowed:
+
+Nelder-Mead
+BFGS
+CG
+L-BFGS-B
+nlm
+nlminb
+spg
+ucminf
+newuoa
+bobyqa
+nmkb
+hjkb
+Rcgmin
+Rvmmin
+
+The first 3 definitely do not allow box constraints, and the 4th we used already. For some of the others, they may or may not allow box constraints. If they don't allow box constraints then some of them might allow returning Inf or NA which allows to quasi implements constraints within the function that is to be optimized.
+
+We should first just test which ones work with the box constraints I set up before.
