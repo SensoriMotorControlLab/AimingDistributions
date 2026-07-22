@@ -693,6 +693,8 @@ initialFits <- function() {
     for (mod in c('stepfunction', 'exponential')) {
       startPar <- getStartingParameters(sig,mod)
       
+      # startPar$pars <- (startPar$pars / 2) + .1
+      
       if (mod == 'stepfunction') {
         out <- NLLstepfunctionModel(data  = behavior, 
                                     par   = startPar$pars, 
@@ -711,7 +713,7 @@ initialFits <- function() {
     }
   }
   
-  write.csv(data.frame(signal=signal, model=model, nll=nll),
+  write.csv(data.frame(signal=signal, model=model, nll=nll, AIC=AIC),
             file='data/fits/initial_model_fits.csv', row.names=FALSE)
   
 }
