@@ -956,7 +956,7 @@ plotAdaptationStepSD <- function(properties=NULL) {
   par(mfrow=c(1,4))
   
   steptrue  <- c( NA,               FALSE,               TRUE,                TRUE               )
-  depvars   <- c('aiming_step_sd', 'aiming_prestep_sd', 'aiming_prestep_sd', 'aiming_poststep_sd')
+  depvars   <- c('adapt_step_sd', 'adapt_prestep_sd', 'adapt_prestep_sd', 'adapt_poststep_sd')
   
   X <- seq(.25, 40, length.out=160)
   
