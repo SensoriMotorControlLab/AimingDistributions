@@ -543,8 +543,8 @@ plotAimingStepSizeTime <- function(properties=NULL) {
   for (rot_idx in c(1,2,3,4,5)) {
     rotation <- c(20,30,40,50,60)[rot_idx]
     propvals <- properties[which(properties$rotation == rotation
-                                   & properties$aiming_step_size > 5
-                                   & properties$aiming_step_time >= 0 
+                                   & properties$aiming_step_size > 5 
+                                   & properties$aiming_step_time >= 0 # is this meaningless? the range is [1,120], inclusive
                                    # & properties$step_time >= 0 
                                    # & properties$step_time < 100
                                    & !is.na(properties$aiming_step_time)
@@ -597,6 +597,10 @@ plotAimingStepSizeTime <- function(properties=NULL) {
   
   allpar <- NA
   
+  # for testing uni-modal stepsize distributions:
+  d_norm <- c()
+  d_gamma <- c()
+  
   for (rot_idx in c(1,2,3,4,5)) {
     rotation <- c(20,30,40,50,60)[rot_idx]
     propvals <- properties[which(properties$rotation == rotation 
@@ -635,6 +639,22 @@ plotAimingStepSizeTime <- function(properties=NULL) {
            rep(rot_idx+0.4,2),
            col=rot_idx, pch=6, cex=1)
     
+    # # # # here we add stuff to get uni-modal step size distributions for each rotation
+    
+    # # cat('normal fit\n')
+    # fitnorm  <- MASS::fitdistr(propvals[which(propvals > 0)], densfun = "normal")
+    # 
+    # # rotation <- c(rotation, rot)
+    # # mu       <- c(mu, fitnorm$estimate['mean'])
+    # # sigma    <- c(sigma, fitnorm$estimate['sd'])
+    # 
+    # # cat('gamma fit\n')
+    # fitgamma <- MASS::fitdistr(propvals[which(propvals > 0)], densfun = "gamma")
+    # # print(fitgamma$estimate)
+    # 
+    # d_norm  <- c(d_norm,  dnorm(propvals[which(propvals > 0)], mean=fitnorm$estimate['mean'], sd=fitnorm$estimate['sd']))
+    # d_gamma <- c(d_gamma, dgamma(propvals[which(propvals > 0)], shape=fitgamma$estimate['shape'], rate=fitgamma$estimate['rate']))
+    
   }
   
   print(allpar)
@@ -643,6 +663,13 @@ plotAimingStepSizeTime <- function(properties=NULL) {
   
   axis(side=1, at=c(0,20,40,60))
   axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
+  
+  
+  # cat('UNI-MODAL Step Size:\n')
+  # cat(sprintf('5 rot normal AIC: %0.1f, 5 rot gamma AIC: %0.1f\n', 
+  #             Reach::AIC(logLik=-1*Reach::nll(d_norm),  k=10, N=length(d_norm)), 
+  #             Reach::AIC(logLik=-1*Reach::nll(d_gamma), k=10, N=length(d_gamma))))
+  
   
 }
 
@@ -900,7 +927,7 @@ plotAdaptationStepSizeTime <- function(properties=NULL) {
     
     pvd <- density(propvals, na.rm=TRUE, bw=1.6,
                    n = 161, from=-10, to=70)
-    
+
     lines(pvd$x, 0.9*(pvd$y/max(pvd$y))+rot_idx-0.45, col=rot_idx)
     points(propvals, rep(rot_idx-0.5, length(propvals)), col=rot_idx, pch=20, cex=0.5)
     
@@ -1523,7 +1550,7 @@ fitFinalStrategyDistributions <- function(properties=NULL) {
 
   fixed <- data.frame('m'=c(0, NA), 's'=c(NA,NA), 'w'=c(NA,NA))
   
-  colname <- 'final_strategy'
+  colname <- 'aiming_final_strategy'
   
   allpar <- NA
   
@@ -1548,7 +1575,7 @@ fitFinalStrategyDistributions <- function(properties=NULL) {
     }
   }
   
-  write.csv(allpar, file='data/final_strategy_multimodal_parameters.csv', row.names=FALSE)
+  write.csv(allpar, file='data/distributions/aiming_expanded_final_strategy_multimodal_parameters.csv', row.names=FALSE)
   return(allpar)
 }
 
@@ -1582,7 +1609,7 @@ fitFinalStrategyDistributions <- function(properties=NULL) {
 
 plotFinalStratModeWeights <- function() {
   
-  read.csv('data/final_strategy_multimodal_parameters.csv') -> allpar
+  read.csv('data/distributions/aiming_expanded_final_strategy_multimodal_parameters.csv') -> allpar
   
   plot(x=NULL,y=NULL,
        xlim=c(15,65), ylim=c(0,1),
@@ -1610,10 +1637,13 @@ plotFinalStratDistributions <- function(properties=NULL) {
   if (is.null(properties)) {
     properties <- getProperties()
   }
-  read.csv('data/final_strategy_multimodal_parameters.csv') -> allpar
+  
+  
+  
+  fitpars <- read.csv('data/distributions/aiming_expanded_final_strategy_multimodal_parameters.csv') -> allpar
   
   # properties <- extractEmpiricalProperties()
-  colname <- 'final_strategy'
+  colname <- 'aiming_final_strategy'
   
   valrange <- c(-10, 70)
   plot(NA, 
@@ -1656,7 +1686,7 @@ fitOnsetGammaDistributions <- function(properties=NULL) {
     properties <- getProperties()
   }
   
-  colname <- 'stratdev_onset'
+  colname <- 'aiming_stratdev_onset'
   
   valrange <- range(properties[, colname], na.rm=TRUE)
   
@@ -1719,7 +1749,7 @@ fitOnsetGammaDistributions <- function(properties=NULL) {
   rate <- rep(all_gamma_fit$estimate['rate'], length(rotation))
   
   par_df <- data.frame('rotation'=rotation, 'shape'=shape, 'rate'=rate)
-  write.csv(par_df, file='data/stratdev_onset_gamma_parameters.csv', row.names=FALSE)
+  write.csv(par_df, file='data/distributions/aiming_expanded_stratdev_onset_gamma_parameters.csv', row.names=FALSE)
 
 }
 
@@ -1729,7 +1759,7 @@ plotOnsetGamma <- function(properties=NULL) {
     properties <- getProperties()
   }
   
-  colname <- 'stratdev_onset'
+  colname <- 'aiming_stratdev_onset'
   
   propvals <- properties[,colname]
   gamma_fit_all <- MASS::fitdistr(propvals[which(!is.na(propvals))], densfun = "gamma")
@@ -1772,81 +1802,59 @@ plotOnsetGamma <- function(properties=NULL) {
 
 ## strategy development duration -----
 
-checkStratDevDuration <- function(properties=NULL) {
+fitStratDevDuration <- function(properties=NULL) {
   
   if (is.null(properties)) {
     properties <- getProperties()
   }
   
-  properties[which(!is.na(properties$devel_duration)),] -> properties
   
-  par(mar=c(5,5,5,5))
-  plot(y = properties$stratdev_onset, 
-       x = properties$devel_duration,
-       xlim=c(0,120), ylim=c(0,120),
-       ylab = 'strategy development onset trial',
-       xlab = 'strategy development duration (trials)',
-       pch=20, col=properties$rotation,
-       asp=1, bty='n', axes=FALSE)
-  lines(x = c(0, 120), y = c(120, 0), col='#999999', lw=1, lty=1)
-  axis(side=1, at=pretty(c(0,120)), labels=pretty(c(0,120)))
-  axis(side=2, at=pretty(c(0,120)), labels=pretty(c(0,120)))
-  legend(90, 120, legend=c(20,30,40,50,60), col=c(1,2,3,4,5), pch=20, bty='n')
+  rot_gamma_d <- c()
   
-  onset_density <- density(properties$stratdev_onset[which(!is.na(properties$stratdev_onset))], na.rm=TRUE, from=0, to=120, n=241)
-  devdur_density <- density(properties$devel_duration[which(!is.na(properties$devel_duration))], na.rm=TRUE, from=0, to=120, n=241)
   
-  polygon(y = c(0,onset_density$x,120), 
-          x = c(0,((onset_density$y/max(onset_density$y))*25),0)+125, 
-          col='#00009966', border=NA, xpd=TRUE)
-  polygon(y = c(0,((devdur_density$y/max(devdur_density$y))*15),0)+125, 
-          x = c(0,devdur_density$x, 120), 
-          col='#00009966', border=NA, xpd=TRUE)
-  
-  # is there a correlation with onset?
-  print(sprintf('correlation onset vs duration:'))
-  print(cor.test(properties$stratdev_onset, properties$devel_duration, na.rm=TRUE))
-  
-  # is it bimodal?
-  devdur <- properties$devel_duration[which(!is.na(properties$devel_duration))]
-  fitpar <- Reach::multiModalFit(x=devdur, n=2, points=6, best=4)
-  print(sprintf('strategy development duration bimodal fit:'))
-  print(fitpar)
-  
-  rotdurbimodpar <- NA
   for (rotation in c(20,30,40,50,60)) {
-    fitpar$rotation <- rotation
-    if (is.data.frame(rotdurbimodpar)) {
-      rotdurbimodpar <- rbind(rotdurbimodpar, fitpar)
-    } else {
-      rotdurbimodpar <- fitpar
-    }
+    propvals <- properties[which(properties$rotation == rotation), 'aiming_devel_duration']
+    propvals <- propvals[which(!is.na(propvals))]
+    
+    gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", lower=c(0,0))
+    
+    rot_gamma_d <- c(rot_gamma_d, dgamma(propvals, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'] ))
+    # print(propvals)
+    # print(dgamma(propvals, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'] ))
+    # poisson_fit <- MASS::fitdistr(propvals, densfun = "poisson")
   }
-  # print(rotdurbimodpar)
-  write.csv(rotdurbimodpar, file='data/stratdev_duration_multimodal_parameters.csv', row.names=FALSE)
   
-  X <- devdur_density$x
+  # all together
+  properties[which(!is.na(properties$aiming_devel_duration)),] -> properties
   
-  Reach::multiModalModel(x=X, par=fitpar) -> yvals
-  lines(x=X, y=(18*(yvals/(max(yvals))))+125, col='red',   lw=1, lty=2, xpd=TRUE)
+  devdur <- properties$aiming_devel_duration[which(!is.na(properties$aiming_devel_duration))]
+  # print(devdur)
+  all_gamma_fit <- MASS::fitdistr(devdur, densfun = "gamma", lower=c(0,0))
   
-  gamma_fit <- MASS::fitdistr(devdur, densfun = "gamma")
-  yvals <- dgamma(X, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
-  lines(x=X, y=(18*(yvals/(max(yvals))))+125, col='green', lw=1, lty=2, xpd=TRUE)
-  
-  gamma_d <- dgamma(devdur, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
-  gamma_nll <- Reach::nll(gamma_d)
+  gamma_d <- dgamma(devdur, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+  one_gamma_nll <- Reach::nll(gamma_d)
+  rot_gamma_nll <- Reach::nll(rot_gamma_d)
 
-  norm_d <- (fitpar$w[1] * dnorm(devdur, mean=fitpar$m[1], sd=fitpar$s[1])) + (fitpar$w[2] * dnorm(devdur, mean=fitpar$m[2], sd=fitpar$s[2]))
-  norm_nll <- Reach::nll(norm_d)
+  cat(sprintf('1 gamma NLL: %0.2f, 5 gamma NLL: %0.2f\n', one_gamma_nll, rot_gamma_nll))
+
+  logLik <- c('one gamma'=one_gamma_nll, 'five gamma'=rot_gamma_nll) * -1
+  cat('AICs:\n')
+  print(Reach::AIC(logLik=logLik, k=c(2, 10), N=length(devdur)))
   
-  # print(log(gamma_d))
-  # print(log(norm_d))
-  print(sprintf('gamma NLL: %0.2f', gamma_nll))
-  print(sprintf('bimodal NLL: %0.2f', norm_nll))
   
-  logLik <- c('gamma'=gamma_nll, 'bimodal'=norm_nll) * -1
-  print(Reach::AIC(logLik=logLik, k=c(2,5), N=length(devdur)))  
+  rotation <- c(20,30,40,50,60)
+  shape <- rep(all_gamma_fit$estimate['shape'], length(rotation)) 
+  rate <- rep(all_gamma_fit$estimate['rate'], length(rotation))
+  
+  par_df <- data.frame('rotation'=rotation, 'shape'=shape, 'rate'=rate)
+  write.csv(par_df, file='data/distributions/aiming_expanded_stratdev_duration_gamma_parameters.csv', row.names=FALSE)
+  
+  # for (dd in devdur) {
+  #   print(dd)
+  #   print(dgamma(dd, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate']))
+  #   
+  # }
+  
 }
 
 ## standard deviations -----
