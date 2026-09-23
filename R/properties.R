@@ -210,6 +210,8 @@ extractEmpiricalProperties <- function() {
         aiming_devel_sd       <- c(aiming_devel_sd,  NA)
         aiming_stable_sd      <- c(aiming_stable_sd, NA)
       } else if (is.na(stab_trial)) {
+        cat('  onset but NO stabilization...\n')
+        # this does not happen (in the first 200 participants)
         aiming_predev_sd      <- c(aiming_predev_sd, sd(ARtimecourse[1:onset])) # only until onset? when does this ever happen?
         aiming_devel_sd       <- c(aiming_devel_sd,  NA)
         aiming_stable_sd      <- c(aiming_stable_sd, NA)
@@ -1859,6 +1861,125 @@ fitStratDevDuration <- function(properties=NULL) {
 
 ## standard deviations -----
 
+
+
+plotExpandedStepSD <- function(properties=NULL) {
+  
+  if (is.null(properties)) {
+    properties <- getProperties()
+  }
+  
+  par(mfrow=c(1,3))
+  
+  depvars   <- c('aiming_predev_sd', 'aiming_devel_sd', 'aiming_stable_sd')
+  
+  X <- seq(.25, 40, length.out=160)
+  
+  
+  rotation <- c()
+  makestep <- c()
+  phase    <- c()
+  shape    <- c()
+  rate     <- c()
+  
+  for (depvar in depvars) {
+    print(depvar)
+    
+    plot(y = NULL, x = NULL,
+         ylab = 'density (by rotation size)',
+         xlab = sprintf('%s (deg)', depvar ),
+         xlim=c(0, max(X)), ylim=c(0.5,5.5),
+         bty='n', axes=FALSE)
+    
+    
+    all_propval <- properties[, depvar]
+    # print(range(all_propval))
+    # print(range(all_propval, na.rm=TRUE))
+    all_propval <- all_propval[which(!is.na(all_propval))]
+    all_propval[which(all_propval <= 0)] <- .Machine$double.eps
+    all_gamma_fit <- MASS::fitdistr(all_propval, densfun = "gamma", lower=c(1.001, 0.001), upper=c(1000,1000))
+    agY <- dgamma(X, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'])
+    
+    allAIC <- stats::AIC(all_gamma_fit, k=2)
+    
+    # all_norm_fit <- MASS::fitdistr(all_propval, densfun = "normal")
+    # anY <- dnorm(X, mean=all_norm_fit$estimate['mean'], sd=all_norm_fit$estimate['sd'])
+    
+    rot_d <- c()
+    
+    for (rot_idx in c(1,2,3,4,5)) {
+      rot <- c(20,30,40,50,60)[rot_idx]
+      propvals <- properties[which(properties$rotation == rot
+                                   
+      ), depvar]
+      # print(propvals)
+      propvals <- propvals[which(!is.na(propvals))]
+      propvals[which(propvals <= 0)] <- .Machine$double.eps
+      
+      points(propvals, rep(rot_idx-0.55, length(propvals)), col=rot_idx, pch=20, cex=0.5)
+      
+      pvd <- density(propvals, na.rm=TRUE,
+                     n = length(X), from=min(X), to=max(X))
+      
+      lines(x = c(0,max(X)),
+            y = rep(0,2)+rot_idx-0.5,
+            col='#ddd')
+      lines(x   = pvd$x,
+            y   = 0.9*(pvd$y/max(pvd$y))+rot_idx-0.5,
+            col = rot_idx)
+      
+      lines(x   = X,
+            y   = 0.9*(agY/max(agY))+rot_idx-0.5,
+            col = 'purple', lw=1, lty=2)
+      # lines(x   = X,
+      #       y   = 0.9*(anY/max(anY))+rot_idx-0.5,
+      #       col = 'orange', lw=1, lty=2)
+      
+      
+      gamma_fit <- MASS::fitdistr(propvals, densfun = "gamma", lower=c(1.001, 0.001), upper=c(1000,1000))
+      Y <- dgamma(X, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'])
+      lines(X, 0.9*(Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=2)
+      
+      # norm_fit <- MASS::fitdistr(propvals, densfun = "normal")
+      # Y <- dnorm(X, mean=norm_fit$estimate['mean'], sd=norm_fit$estimate['sd'])
+      # lines(X, 0.9*(Y/max(Y))+rot_idx-0.5, col=rot_idx, lw=1, lty=3)
+      
+      rot_d <- c(rot_d, dgamma(propvals, shape=gamma_fit$estimate['shape'], rate=gamma_fit$estimate['rate'] ))
+      
+      # gamma_nll <- nll(d = dgamma(propvals, shape=all_gamma_fit$estimate['shape'], rate=all_gamma_fit$estimate['rate'] ))
+      # agAIC <- Reach::AIC(logLik = -1*gamma_nll, k=2, N=length(propvals))
+      # cat(sprintf('gamma AIC: %0.1f, all gamma AIC: %0.1f\n',stats::AIC(gamma_fit, k=2), agAIC))
+      # print(gamma_fit$estimate)
+      
+      # cat(sprintf('gamma AIC: %0.1f, normal AIC: %0.1f\n',stats::AIC(gamma_fit, k=2), stats::AIC(norm_fit, k=2)))
+      
+      # norm_nll  <- nll(d = dnorm(propvals,  mean=all_norm_fit$estimate['mean'], sd=all_norm_fit$estimate['sd']))
+      # anAIC <- Reach::AIC(logLik = -1*norm_nll,  k=2, N=length(propvals))
+      # cat(sprintf('all gamma AIC: %0.1f, all normal AIC: %0.1f\n',agAIC, anAIC))
+      
+      rotation <- c(rotation, rot)
+      # makestep <- c(makestep, steptrue[situation])
+      phase    <- c(phase, depvar)
+      shape    <- c(shape, gamma_fit$estimate['shape'])
+      rate     <- c(rate, gamma_fit$estimate['rate'])
+      
+    }
+    
+    rot_gamma_nll <- nll(d = rot_d)
+    rotgAIC <- Reach::AIC(logLik = -1*rot_gamma_nll, k=10, N=length(rot_d))
+    cat(sprintf('one gamma AIC: %0.1f, 5rot gamma AIC: %0.1f\n', allAIC, rotgAIC))
+    
+    axis(side=1, at=c(0,20,40))
+    axis(side=2, at=c(1,2,3,4,5), labels=c(20,30,40,50,60))
+    
+  }
+  
+  step_SD_gamma_distr <- data.frame('rotation'=rotation, 'phase'=phase, 'shape'=shape, 'rate'=rate)
+  write.csv(step_SD_gamma_distr, file='data/distributions/aiming_expanded_SD_gamma_parameters.csv', row.names=FALSE)
+  
+}
+
+
 correlateSDs <- function(properties=NULL) {
   
   if (is.null(properties)) {
@@ -1866,9 +1987,9 @@ correlateSDs <- function(properties=NULL) {
   }
   
   # one of them is too high:
-  properties <- properties[which(properties$stable_sd < 40),]
+  properties <- properties[which(properties$aiming_stable_sd < 40),]
   
-  sd_vars <- c('predev_sd','devel_sd','stable_sd')
+  sd_vars <- c('aiming_predev_sd','aiming_devel_sd','aiming_stable_sd')
   # cat('outer loop:\n')
   # print(c(1,length(sd_vars)-1))
   for (first in c(1,length(sd_vars)-1)) {
@@ -1895,7 +2016,7 @@ plotSDbyRotation <- function(properties=NULL) {
   }
   
   # one of them is too high:
-  properties <- properties[which(properties$stable_sd < 40),]
+  properties <- properties[which(properties$aiming_stable_sd < 40),]
   
   layout(mat=matrix(c(1,2,3),nrow=1,byrow=TRUE))
   
@@ -1904,7 +2025,7 @@ plotSDbyRotation <- function(properties=NULL) {
   shape = c()
   rate = c()
   
-  sd_vars <- c('predev_sd','devel_sd','stable_sd')
+  sd_vars <- c('aiming_predev_sd','aiming_devel_sd','aiming_stable_sd')
   for (col_idx in c(1:length(sd_vars))) {
     colname <- sd_vars[col_idx]
     valrange <- c(0, c(90,60,15)[col_idx])
