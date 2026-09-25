@@ -427,20 +427,38 @@ saveSimulations <- function() {
     
     simulations[[signal]] <- list()
     
-    for (model in c('stepfunction', 'exponential')) {
+    for (model in c('stepfunction', 'exponential', 'expanded')) {
+      
+      if (model == 'expanded' & signal == 'adapt') {
+        next # no such model for adaptation!
+      }
+      
       
       simulations[[signal]][[model]] <- list()
       
-      startPars <- getStartingParameters(signal, model)
       
       if (model == 'stepfunction') {
+        startPars <- getStartingParameters(signal, model)
+        
         out <- getStepfunctionSimulations( par   = startPars$pars,
                                            fixed = startPars$fixed,
                                            n_simulations = 20000)
-      } else if (model == 'exponential') {
+      }
+      
+      if (model == 'exponential') {
+        startPars <- getStartingParameters(signal, model)
+        
         out <- getExponentialSimulations( par   = startPars$pars,
                                           fixed = startPars$fixed,
                                           n_simulations = 20000)
+      }
+      
+      if (model == 'expanded' & signal == 'aiming') {
+        next
+        startPars <- getStartingParameters(signal, model)
+        out <- getExpandedSimulations( par   = startPars$pars,
+                                       fixed = startPars$fixed,
+                                       n_simulations = 20000)
       }
       
       simulations[[signal]][[model]][['simulations']] <- out
@@ -545,6 +563,52 @@ getExponentialSimulations <- function(par, fixed=NULL, n_simulations=5000) {
   
 }
 
+getExpandedSimulations <- function(par, fixed=NULL, n_simulations=20000) {
+  
+  # combine the fixed and free parameters into one list
+  if (!is.null(fixed)) {
+    all_pars <- c(par, fixed)
+  } else {
+    all_pars <- par
+  }
+  
+  gen_idx <- grep('all_', names(all_pars))
+  gen_pars <- all_pars[gen_idx]
+  names(gen_pars) <- substr(names(gen_pars), 5, nchar(names(gen_pars)))
+  
+  # the simulations use lots of random numbers, which makes the model
+  # a bit, well "random"... to make it more stable by setting the rng seed here 
+  # that way, the same "random" numbers are used in each run of the model
+  set.seed(37331)
+  
+  out <- list()
+  
+  for (rotation in c(20,30,40,50,60)) {
+    
+    rot_idx <- grep(sprintf('r%d_', rotation), names(all_pars))
+    rot_pars <- all_pars[rot_idx]
+    # rot_pars <- all_pars[grep(sprintf('r%d_', rotation), names(all_pars))]
+    
+    # cat('read from here:\n')
+    names(rot_pars) <- substr(names(rot_pars), 5, nchar(names(rot_pars)))
+    # print(rot_pars)
+    
+    model <- simulateExpandedModel( par           = c(gen_pars, rot_pars),
+                                    n_simulations = n_simulations)
+    
+    print(str(model))
+    
+    out[[as.character(rotation)]] <- model
+    
+  }
+  
+  cat('done?\n')
+  return(out)
+  
+}
+
+
+
 # statistics ----
 
 nll <- function(d) {
@@ -567,7 +631,7 @@ nll <- function(d) {
 }
 
 
-calculateAICs <- function() {
+calculateAICs <- function(stat='BIC') {
   
   for (signal in c('aiming', 'adapt')) {
     
@@ -579,27 +643,40 @@ calculateAICs <- function() {
     step_d <- c()
     exp_d  <- c()
     # cat('calculating likelihoods...\n')
-    for (rotation in c(60)) {
+    for (rotation in c(20,30,40,50,60)) {
       
       data <- behavior[[as.character(rotation)]]
       step_model <- stepfunction[[as.character(rotation)]]
-      exp_model  <- exponential[[as.character(rotation)]]
+      # exp_model  <- exponential[[as.character(rotation)]]
       
       step_densities <- getProbabilityDensities(data, step_model)
-      exp_densities  <- getProbabilityDensities(data, exp_model)
+      # exp_densities  <- getProbabilityDensities(data, exp_model)
       
       step_d <- c(step_d, step_densities)
-      exp_d  <- c(exp_d, exp_densities)
+      # exp_d  <- c(exp_d, exp_densities)
       
     }
-    # cat('calculating AICs...\n')
+    # cat('calculating xICs...\n')
     step_k <- 5 * (5 + 2 + 2)
     exp_k  <- 5 * (5 + 1 + 2)
     
-    step_AIC <- Reach::AIC(logLik = -1*Reach::nll(step_d), k = step_k, N=length(step_d))
-    exp_AIC  <- Reach::AIC(logLik = -1*Reach::nll(exp_d ), k = exp_k,  N=length(exp_d ))
+    if (stat == 'AIC') {
+      
+      step_AIC <- Reach::AIC(logLik = -1*Reach::nll(step_d), k = step_k, N=length(step_d))
+      exp_AIC  <- Reach::AIC(logLik = -1*Reach::nll(exp_d ), k = exp_k,  N=length(exp_d ))
+      
+      cat(sprintf('%s: step-function AIC = %.2f, exponential AIC = %.2f\n', signal, step_AIC, exp_AIC))
+      
+    }
     
-    cat(sprintf('%s: step-function AIC = %.2f, exponential AIC = %.2f\n', signal, step_AIC, exp_AIC))
+    if (stat == 'BIC') {
+      
+      step_BIC <- Reach::BIC(logLik = -1*Reach::nll(step_d), k = step_k, N=length(step_d))
+      exp_BIC  <- Reach::BIC(logLik = -1*Reach::nll(exp_d ), k = exp_k,  N=length(exp_d ))
+      
+      cat(sprintf('%s: step-function BIC = %.2f, exponential BIC = %.2f\n', signal, step_BIC, exp_BIC))
+      
+    }
     
   }
   
@@ -773,18 +850,32 @@ getStartingParameters <- function(signal, model) {
   
   if (signal %in% c('aiming','adapt')) {
   } else {
-    cat('signal must be either "aiming" or "adapt"\n')
+    # cat('signal must be either "aiming" or "adapt"\n')
+    stop('signal must be either "aiming" or "adapt"')
   }
   
-  if (model %in% c('stepfunction','exponential')) {
+  if (model %in% c('stepfunction','exponential','expanded')) {
   } else {
-    cat('model must be either "stepfunction" or "exponential"\n')
+    # cat('model must be either "stepfunction" or "exponential"\n')
+    stop('model must be "stepfunction", "exponential" or "expanded"')
   }
+  
+  if (model == 'expanded') {
+    if (signal != 'aiming') {
+      # cat('expanded step-function model is only implemented for aiming data\n')
+      stop('expanded step-function model is only implemented for aiming data')
+    }
+  }
+  
+  # in returned parameter lists, names starting with 'all_' apply to all rotations
+  # those starting with 'r20_' apply to 20 degree rotation, etc.
   
   pars <- list()
   lower <- c()
   upper <- c()
   fixed <- list()
+  
+  #### stepfunction ----
   
   if (model == 'stepfunction') {
     
@@ -806,11 +897,13 @@ getStartingParameters <- function(signal, model) {
     upper <- c(upper, Inf)
     
     
+    
+    # rotation specific parameters:
+    step_size_distr_name <- list('aiming' = 'multimodal', 'adapt' = 'normal')[[signal]]
+    step_size_distributions <- read.csv(sprintf('data/distributions/%s_step_size_%s_parameters.csv', signal, step_size_distr_name), stringsAsFactors = FALSE)
+    step_SD_distributions   <- read.csv(sprintf('data/distributions/%s_step_SD_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
+    
     for (rotation in c(20,30,40,50,60)) {
-      
-      step_size_distr_name <- list('aiming' = 'multimodal', 'adapt' = 'normal')[[signal]]
-      step_size_distributions <- read.csv(sprintf('data/distributions/%s_step_size_%s_parameters.csv', signal, step_size_distr_name), stringsAsFactors = FALSE)
-      step_SD_distributions   <- read.csv(sprintf('data/distributions/%s_step_SD_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
       
       if (signal == 'adapt') {
         step_size_distr <- step_size_distributions[step_size_distributions$rotation==rotation,]
@@ -852,12 +945,22 @@ getStartingParameters <- function(signal, model) {
         fixed[sprintf('r%d_asymp_w1',       rotation)] = asymp_distr$w[2]
       }
       
-      pars[sprintf('r%d_noise',          rotation)] = step_SD_distr$shape/step_SD_distr$rate
-      lower <- c(lower, .1)
+      # a simplification we will no longer use:      
+      # pars[sprintf('r%d_noise',          rotation)] = step_SD_distr$shape/step_SD_distr$rate
+      # lower <- c(lower, .1)
+      # upper <- c(upper, Inf)
+      
+      pars[sprintf('r%d_noise_shape', rotation)] = step_SD_distr$shape
+      lower <- c(lower, 1.001)
       upper <- c(upper, Inf)
+      pars[sprintf('r%d_noise_rate',  rotation)] = step_SD_distr$rate
+      lower <- c(lower, 0.001)
+      upper <- c(upper, Inf)
+      
     }
     
-
+   #### exponential ----
+    
   } else if (model == 'exponential') {
     
     # single parameters:
@@ -879,11 +982,12 @@ getStartingParameters <- function(signal, model) {
     upper <- c(upper, Inf)
     
     
+    # rotation specific parameters:
+    asymptote_distr_name <- list('aiming' = 'multimodal', 'adapt' = 'normal')[[signal]]
+    asymptote_distributions <- read.csv(sprintf('data/distributions/%s_exp_asymptote_%s_parameters.csv', signal, asymptote_distr_name), stringsAsFactors = FALSE)
+    exponential_SD_distributions   <- read.csv(sprintf('data/distributions/%s_exp_sd_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
+    
     for (rotation in c(20,30,40,50,60)) {
-      
-      asymptote_distr_name <- list('aiming' = 'multimodal', 'adapt' = 'normal')[[signal]]
-      asymptote_distributions <- read.csv(sprintf('data/distributions/%s_exp_asymptote_%s_parameters.csv', signal, asymptote_distr_name), stringsAsFactors = FALSE)
-      exponential_SD_distributions   <- read.csv(sprintf('data/distributions/%s_exp_sd_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
       
       if (signal == 'adapt') {
         asymp_distr <- asymptote_distributions[asymptote_distributions$rotation==rotation,]
@@ -937,11 +1041,104 @@ getStartingParameters <- function(signal, model) {
         
       }
       
-      pars[sprintf('r%d_noise', rotation)]    = exp_SD_distr$shape/exp_SD_distr$rate
-      lower <- c(lower, .1)
+      # pars[sprintf('r%d_noise', rotation)]    = exp_SD_distr$shape/exp_SD_distr$rate
+      # lower <- c(lower, .1)
+      # upper <- c(upper, Inf)
+      
+      pars[sprintf('r%d_noise_shape', rotation)] = exp_SD_distr$shape
+      lower <- c(lower, 1.001)
+      upper <- c(upper, Inf)
+      pars[sprintf('r%d_noise_rate',  rotation)] = exp_SD_distr$rate
+      lower <- c(lower, 0.001)
       upper <- c(upper, Inf)
       
     }
+    
+  } else if (model == 'expanded') {
+  
+    #### expandedstep ----
+
+    # this is the same:
+    # - mu 1: mean of the first mode
+    # - mu 2: mean of the second mode
+    # - sigma 1: standard deviation of the first mode
+    # - sigma 2: standard deviation of the second mode
+    # - pi: proportion of the first mode (the second mode is 1-pi)
+    
+    
+      # | No. | property                | distribution |
+      # |-----|-------------------------|--------------|
+      # | 1   | size of final strategy  | 5 bi-modal   | # see above
+      # | 2   | strat. dev. onset trial | 1 gamma      |
+      # | 3   | strat. dev. duration    | 1 bi-modal   |
+      # | 4   | pre-dev SD              | 5 gamma      |
+      # | 5   | strat. dev. SD          | 5 gamma      |
+      # | 6   | post-dev SD             | 5 gamma      |
+
+    stratdev_onset_distributions <- read.csv(sprintf('data/distributions/%s_expanded_stratdev_onset_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
+    
+    pars['all_devonset_rate'] = stratdev_onset_distributions$rate[1]
+    lower <- c(lower, .0001)
+    upper <- c(upper, Inf)
+    pars['all_devonset_shape'] = stratdev_onset_distributions$shape[1]
+    lower <- c(lower, .1)
+    upper <- c(upper, Inf)
+    
+        
+    stratdev_duration_distributions <- read.csv(sprintf('data/distributions/%s_expanded_stratdev_duration_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
+    
+    pars['all_devdurat_rate'] = stratdev_duration_distributions$rate[1]
+    lower <- c(lower, .0001)
+    upper <- c(upper, Inf)
+    pars['all_devdurat_shape'] = stratdev_duration_distributions$shape[1]
+    lower <- c(lower, .1)
+    upper <- c(upper, Inf)
+    
+
+    
+    # rotation specific parameters:
+    finalstrat_distributions <- read.csv(sprintf('data/distributions/%s_expanded_final_strategy_multimodal_parameters.csv', signal), stringsAsFactors = FALSE)
+    SD_distributions         <- read.csv(sprintf('data/distributions/%s_expanded_SD_gamma_parameters.csv', signal), stringsAsFactors = FALSE)
+    
+    for (rotation in c(20,30,40,50,60)) {
+      
+      asymp_distr <- finalstrat_distributions[finalstrat_distributions$rotation==rotation,c('m','s','w')]
+      
+      if (signal == 'aiming') {
+        
+        fixed[sprintf('r%d_asymp_m0',       rotation)] = asymp_distr$m[1]
+        
+        pars[ sprintf('r%d_asymp_s0',       rotation)] = asymp_distr$s[1]
+        lower <- c(lower, .0001)
+        upper <- c(upper, Inf)
+        
+        fixed[sprintf('r%d_asymp_w0',       rotation)] = asymp_distr$w[1]
+        fixed[sprintf('r%d_asymp_m1',       rotation)] = asymp_distr$m[2]
+        
+        pars[ sprintf('r%d_asymp_s1',       rotation)] = asymp_distr$s[2]
+        lower <- c(lower, .0001)
+        upper <- c(upper, Inf)
+        
+        fixed[sprintf('r%d_asymp_w1',       rotation)] = asymp_distr$w[2]
+        
+      }
+      
+      SD_rot_distr   <- SD_distributions[which(SD_distributions$rotation==rotation),c('phase','shape','rate')] 
+      
+      for (phase in c('predev','devel','stable')) {
+        SD_rotshape_distr <- SD_rot_distr[which(SD_rot_distr$phase == sprintf('aiming_%s_sd',phase)),c('shape','rate')]
+        pars[sprintf('r%d_%s_shape', rotation, phase)] = SD_rotshape_distr$shape
+        lower <- c(lower, 1.001)
+        upper <- c(upper, Inf)
+        pars[sprintf('r%d_%s_rate', rotation, phase)] = SD_rotshape_distr$rate
+        lower <- c(lower, 0.001)
+        upper <- c(upper, Inf)
+        
+      }
+
+    }
+    
+    
     
   }
   
@@ -1061,7 +1258,10 @@ simulateStepfunctionModel <- function( par, n_simulations = 20000) {
   steptime_rate  <- par['steptime_rate']
   steptime_shape <- par['steptime_shape']
   
-  noise          <- par['noise']
+  # noise          <- par['noise']
+  noise_rate  <- par['noise_rate']
+  noise_shape <- par['noise_shape']
+  
   
   
 
@@ -1104,12 +1304,15 @@ simulateStepfunctionModel <- function( par, n_simulations = 20000) {
                                            shape = steptime_shape,
                                            rate  = steptime_rate ) )
   
+  noise_level <- rgamma(n=n_simulations, shape=noise_shape, rate=noise_rate)
+  noise_level <- rep(noise_level, each=trials) # same SD for all trials in a simulated participant
+  
   # if gamma returns NAs, we make the step time, the latest possible
-  # and increase the noise, so that the model can still fit the dat
+  # and increase the noise, so that the model can still fit the data
   # but returns low likelihoods, so that the optimizer can find a better solution
   if (any(is.na(step_times[mode == 2]))) {
     step_times[mode == 2] <- trials
-    noise <- 999999
+    noise_level <- 999999
   }
   
   step_times[which(step_times > trials)] <- trials
@@ -1127,7 +1330,7 @@ simulateStepfunctionModel <- function( par, n_simulations = 20000) {
   
   rand_noise <- matrix( rnorm(n=trials*n_simulations,
                               mean=0,
-                              sd=noise), # same SD for all trials in a simulated participant
+                              sd=noise_level), # same SD for all trials in a simulated participant
                         nrow=n_simulations,
                         ncol=trials,
                         byrow = TRUE)
@@ -1235,7 +1438,11 @@ simulateExponentialModel <- function( par, n_simulations = 20000) {
   roc_rate  <- par['roc_rate']
   roc_shape <- par['roc_shape']
 
-  noise     <- par['noise']
+  # noise     <- par['noise']
+  noise_rate  <- par['noise_rate']
+  noise_shape <- par['noise_shape']
+  
+  # print(c(noise_rate, noise_shape))
   
   trials <- 120
   
@@ -1282,9 +1489,12 @@ simulateExponentialModel <- function( par, n_simulations = 20000) {
   #                 ncol=trials,
   #                 byrow = TRUE)
   
+  noise_level <- rgamma(n=n_simulations, shape=noise_shape, rate=noise_rate)
+  noise_level <- rep(noise_level, each=trials) # same SD for all
+  
   rand_noise <- matrix( rnorm(n    = trials*n_simulations,
                               mean = 0,
-                              sd   = noise), # same SD for all participants and trials
+                              sd   = noise_level), # same SD for all participants and trials
                         nrow=n_simulations,
                         ncol=trials,
                         byrow = TRUE)
@@ -1294,4 +1504,246 @@ simulateExponentialModel <- function( par, n_simulations = 20000) {
   
   return(responses)
    
+}
+
+
+
+### expanded specific ----
+
+fitExpandedModel <- function(data, par, fixed, lower=NULL, upper=NULL) {
+  
+  methods <- "L-BFGS-B"
+  
+  if (!is.null(lower) & !is.null(upper)) {
+    model <- optimx::optimx(  par = par, 
+                              NLLexpandedModel,
+                              method = methods,
+                              lower = lower,
+                              upper = upper,
+                              data = data,
+                              fixed = fixed
+    )
+  } else {
+    model <- optim( par = par, 
+                    NLLexpandedModel,
+                    method = "BFGS",
+                    data = data,
+                    fixed = fixed
+    )
+  }
+  
+  
+  
+  return(list('model'=model, 'fixedpar'=fixed))
+  
+}
+
+NLLexpandedModel <- function(par, data, fixed=NULL, n_simulations=5000) {
+  
+  # combine the fixed and free parameters into one list
+  if (!is.null(fixed)) {
+    all_pars <- c(par, fixed)
+  } else {
+    all_pars <- par
+  }
+  
+  probdens <- c()
+  
+  # print(str(data))
+  
+  gen_idx <- grep('all_', names(all_pars))
+  gen_pars <- all_pars[gen_idx]
+  names(gen_pars) <- substr(names(gen_pars), 5, nchar(names(gen_pars)))
+  
+  # the simulations use lots of random numbers, which makes the model
+  # a bit, well "random"... to make it more stable by setting the rng seed here 
+  # that way, the same "random" numbers are used in each run of the model
+  set.seed(37331)
+  
+  for (rotation in c(20,30,40,50,60)) {
+    
+    rot_idx <- grep(sprintf('r%d_', rotation), names(all_pars))
+    rot_pars <- all_pars[rot_idx]
+    # rot_pars <- all_pars[grep(sprintf('r%d_', rotation), names(all_pars))]
+    
+    # cat('read from here:\n')
+    names(rot_pars) <- substr(names(rot_pars), 5, nchar(names(rot_pars)))
+    # print(rot_pars)
+    
+    model <- simulateExpandedModel( par           = c(gen_pars, rot_pars),
+                                    n_simulations = n_simulations)
+    
+    # noise <- c(gen_pars, rot_pars)['noise']
+    
+    # print(str(model))
+    probdens <- c(probdens, 
+                  getProbabilityDensities(data[[sprintf('%d',rotation)]], 
+                                          model))
+    
+  }
+  
+  # negLogLik <- Reach::nll(probdens)
+  negLogLik <- nll(probdens)
+  cat(sprintf('negLogLik: %.2f\n', negLogLik))
+  return(negLogLik)
+  
+}
+
+simulateExpandedModel <- function( par, n_simulations = 20000) {
+  
+  # unpack the parameters:
+  asymp_m1 <- par['asymp_m0']
+  asymp_s1 <- par['asymp_s0']
+  asymp_w1 <- par['asymp_w0']
+  
+  asymp_m2 <- par['asymp_m1']
+  asymp_s2 <- par['asymp_s1']
+  asymp_w2 <- par['asymp_w1']
+  
+  # steptime_rate  <- par['steptime_rate']
+  # steptime_shape <- par['steptime_shape']
+  
+  devonset_rate  <- par['devonset_rate']
+  devonset_shape <- par['devonset_shape']
+  devdurat_rate  <- par['devdurat_rate']
+  devdurat_shape <- par['devdurat_shape']
+  
+  # noise          <- par['noise']
+  predev_noise_rate  <- par['predev_rate']
+  predev_noise_shape <- par['predev_shape']
+  devel_noise_rate  <- par['devel_rate']
+  devel_noise_shape <- par['devel_shape']
+  stable_noise_rate  <- par['stable_rate']
+  stable_noise_shape <- par['stable_shape']
+  
+  # cat('unpacked parameters\n')
+  
+  trials <- 120 # should this be a parameter as well?
+  
+  # Create a matrix to store the results
+  results <- matrix(0, nrow = n_simulations, ncol = trials)
+  
+  # strategy or no strategy?
+  if (asymp_w1 == 0) {
+    # if the weight of the first mode is 0, we only use the second mode
+    # (the above-0 asymptote mode)
+    # meant for adaptation where it's a uni-modal distribution
+    mode <- rep(2, n_simulations) 
+  } else {
+    mode <- as.integer( runif(n_simulations) > asymp_w1 ) + 1
+  }
+  
+  # cat('modes assigned by weights\n')
+  
+  # final strategy is drawn from a bi-modal distribution
+  # analog to step_size
+  
+  start_strats <- rnorm(n_simulations, mean = asymp_m1, sd = asymp_s1)
+  final_strats <- rep(0, n_simulations)
+  if (any(mode == 1)) {
+    final_strats[mode == 1] <- final_strats[mode == 1]
+  }
+  # step_sizes[mode == 1] <- 0
+  final_strats[mode == 2] <- rnorm(sum(mode == 2), mean = asymp_m2, sd = asymp_s2)
+  
+  # cat('final strategies drawn from normal distributions\n')
+  
+  
+  
+  
+  # # step times (NA for no step - should not be used later on, which will throw errors):
+  # step_times <- rep(NA, n_simulations)
+  # step_times[mode == 2] <- ceiling(rgamma( n=sum(mode == 2),
+  #                                          shape = steptime_shape,
+  #                                          rate  = steptime_rate ) )
+  
+  phases <- matrix( rep(1, n_simulations*trials), # 1=predev, 2=devel, 3=stable
+                    nrow=n_simulations,
+                    ncol=trials,
+                    byrow = TRUE)
+  
+  onset_trials <- ceiling(rgamma(n=n_simulations, shape=devonset_shape, rate=devonset_rate))
+  onset_trials[which(onset_trials > trials)] <- trials
+  # onset_trials[mode == 1] <- 120 # no strategy: onset is very last trial?
+  development <- matrix( unlist(lapply(onset_trials, function(x) c(rep(0,x),rep(1,120-x)))),
+                         nrow=n_simulations,
+                         ncol=trials,
+                         byrow = TRUE)
+  
+  duration_trials <- ceiling(rgamma(n=n_simulations, shape=devdurat_shape, rate=devdurat_rate))
+  idx <- which(onset_trials + duration_trials > trials)
+  duration_trials[idx] <- trials - onset_trials[idx]  # just -1? maybe -8?
+  
+  # probably not necessary?
+  duration_trials[which(mode == 1)] <- 0 # at least one trial of development
+  
+  
+  stable <- matrix( unlist(lapply(1:n_simulations, function(x) c(rep(0,onset_trials[x]+duration_trials[x]),rep(1,120-(onset_trials[x]+duration_trials[x]))))),
+                    nrow=n_simulations,
+                    ncol=trials,
+                    byrow = TRUE)
+  
+  phases <- phases + development + stable
+  phases[which(mode == 1),] <- 1 # if no strategy, all trials are predev
+  # print(table(phases))
+  
+  # responses <- matrix( rep(start_strats, each=trials),
+  #                      nrow=n_simulations,
+  #                      ncol=trials,
+  #                      byrow = TRUE)
+  
+  # return(data.frame(duration_trials, final_strats, start_strats))
+  slopes <- duration_trials / (final_strats - start_strats)
+  # return(slopes[which(mode == 2)])
+  
+  responses <- lapply(1:n_simulations, function(x) {
+    tc <- (slopes[x] * (c(1:120) - onset_trials[x])) + start_strats[x]
+    tc[which(tc < start_strats[x])] <- start_strats[x]
+    tc[which(tc > final_strats[x])] <- final_strats[x]
+    return(tc)
+    }
+  )
+  
+  responses <- matrix( unlist(responses), nrow=n_simulations, ncol=trials, byrow = TRUE)
+  
+
+  predev_noise_level <- rgamma(n=n_simulations, shape=predev_noise_shape, rate=predev_noise_rate)
+  predev_noise_level <- rep(predev_noise_level, each=trials)
+  devel_noise_level  <- rgamma(n=n_simulations, shape=devel_noise_shape, rate=devel_noise_rate)
+  devel_noise_level <- rep(devel_noise_level, each=trials)
+  stable_noise_level <- rgamma(n=n_simulations, shape=stable_noise_shape, rate=stable_noise_rate)
+  stable_noise_level <- rep(stable_noise_level, each=trials)
+  
+  predev_noise <- matrix( rnorm(n=trials*n_simulations,
+                              mean=0,
+                              sd=predev_noise_level), # same SD for all trials in a simulated participant
+                        nrow=n_simulations,
+                        ncol=trials,
+                        byrow = TRUE)
+  
+  predev_noise[which(phases != 1)] <- 0
+  
+  devel_noise <- matrix( rnorm(n=trials*n_simulations,
+                              mean=0,
+                              sd=devel_noise_level), # same SD for all trials in a simulated participante
+                        nrow=n_simulations,
+                        ncol=trials,
+                        byrow = TRUE)
+  
+  devel_noise[which(phases != 2)] <- 0
+  
+  stable_noise <- matrix( rnorm(n=trials*n_simulations,
+                              mean=0,
+                              sd=stable_noise_level), # same SD for all trials in a simulated participant
+                        nrow=n_simulations,
+                        ncol=trials,
+                        byrow = TRUE)
+  
+  stable_noise[which(phases != 3)] <- 0
+  
+  # noise is added in one go:
+  responses <- responses + predev_noise + devel_noise + stable_noise
+  
+  return(responses)
+  
 }

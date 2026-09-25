@@ -13,7 +13,13 @@ knitr::opts_chunk$set(echo = TRUE)
 source('R/model_sims.R')
 ```
 
-## Model Distributions
+# Intro & Setup
+
+
+# Descriptive parameter extraction
+
+
+# Model Distributions
 
 First we have the simulations for all 4 cases: for both aiming and adaptation we run the stepfunction and exponential style models.
 
@@ -23,6 +29,8 @@ saveSimulations()
 
 This stores the parameters as well, but not the NLL. Anyways, now we can plot them.
 
+## Adaptation: exponential vs. stepwise
+
 Here are the data and model distributions for adaptation:
 
 ```{r adapt_distr_plots, fig.width=8, fig.height=10}
@@ -30,9 +38,13 @@ plotDataAndFits(signal='adapt')
 ```
 
 
+## Aiming: exponential vs. stepwise
+
 And here are the data and model distributions for aiming:
 
 ```{r aiming_distr_plots, fig.width=8, fig.height=10}
 plotDataAndFits(signal='aiming')
 ```
+
+## Stepwise Aiming: uni-modal vs. bi-modal
 
