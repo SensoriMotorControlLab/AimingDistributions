@@ -4,6 +4,7 @@
 
 extractEmpiricalProperties <- function() {
   
+  demographics <- read.csv('data/demographics.csv', stringsAsFactors = FALSE)
   
   ppno <- 0
 
@@ -41,13 +42,26 @@ extractEmpiricalProperties <- function() {
   
   for (rot in c(20,30,40,50,60)) {
     
-    rotfiles <- list.files(path = "data/summaries", 
+    rotfiles <- list.files(path = sprintf("data/summaries/aiming%d", rot),
                            pattern = sprintf("SUMMARY_aiming%d", rot))
     
     for (rotfile in rotfiles) {
-      ppno <- ppno + 1
-      
+
       ppid <- substr(strsplit(rotfile, "_")[[1]][3], 1, 6)
+      
+      if (!ppid %in% demographics$participant) {
+        cat(sprintf('skipping participant (%s, %d° rotation) - not in demographics\n', ppnd, rot))
+        next
+      }
+      # print(ppid)
+      # print(which(demographics$participant == ppid))
+      # print(!demographics$learner[which(demographics$participant == ppid)])
+      if (!demographics$learner[which(demographics$participant == ppid)]) {
+        cat(sprintf('skipping participant (%s, %d° rotation) - non-learner\n', ppid, rot))
+        next
+      }
+      
+      ppno <- ppno + 1
       
       cat(sprintf('working on participant %d (%s, %d° rotation)\n', ppno, ppid, rot))
       
@@ -57,7 +71,7 @@ extractEmpiricalProperties <- function() {
       # print (ppid)
       
       # read participant data
-      data <- read.csv(sprintf("data/summaries/%s", rotfile))
+      data <- read.csv(sprintf("data/summaries/aiming%d/%s", rot, rotfile))
       
       # aiming
       ARtimecourse <- data$aimdeviation_deg[which(data$rotation_deg == -1 * rot)]
@@ -189,7 +203,7 @@ extractEmpiricalProperties <- function() {
       final_strat    <- median(ARtimecourse[c((length(ARtimecourse)-ntrials+1):length(ARtimecourse))])
       aiming_final_strategy <- c(aiming_final_strategy, final_strat)
       
-      onset <- which(ARtimecourse > 5)[1]
+      onset <- which(abs(ARtimecourse) > 5)[1]
       if (final_strat < 5) {
         onset <- NA
       }
@@ -241,7 +255,7 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(aiming_exp_prop_sd,
-            file='data/properties/aiming_exponential_properties.csv',
+            file='data/properties/aiming_exponential_properties_211.csv',
             row.names=FALSE, quote=TRUE)
 
   adapt_exp_prop_sd <- data.frame(
@@ -253,7 +267,7 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(adapt_exp_prop_sd,
-            file='data/properties/adaptation_exponential_properties.csv',
+            file='data/properties/adaptation_exponential_properties_211.csv',
             row.names=FALSE, quote=TRUE)
   
   aiming_stepwise_prop_df <- data.frame(
@@ -267,7 +281,7 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(aiming_stepwise_prop_df, 
-            file='data/properties/aiming_stepwise_properties.csv', 
+            file='data/properties/aiming_stepwise_properties_211.csv', 
             row.names=FALSE, quote=TRUE)
   
   adapt_stepwise_prop_df <- data.frame(
@@ -281,7 +295,7 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(adapt_stepwise_prop_df, 
-            file='data/properties/adaptation_stepwise_properties.csv', 
+            file='data/properties/adaptation_stepwise_properties_211.csv', 
             row.names=FALSE, quote=TRUE)
   
   aiming_expanded_prop_df <- data.frame(
@@ -297,7 +311,7 @@ extractEmpiricalProperties <- function() {
   )
   
   write.csv(aiming_expanded_prop_df, 
-            file='data/properties/aiming_expanded_properties.csv', 
+            file='data/properties/aiming_expanded_properties_211.csv', 
             row.names=FALSE, quote=TRUE)
   
 }
