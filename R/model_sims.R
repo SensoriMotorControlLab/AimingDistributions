@@ -218,6 +218,8 @@ bootstrapExponentialModel <- function(asymp_distr,
 
 readData <- function(signal) {
   
+  demographics <- read.csv('data/demographics.csv', stringsAsFactors = FALSE)
+  
   if (signal %in% c('aiming','adapt')) {
   } else {
     cat('signal must be either "aiming" or "adapt"\n')
@@ -227,31 +229,40 @@ readData <- function(signal) {
   
   for (rot in c(20,30,40,50,60)) {
     
-    rotfiles <- list.files(path = "data/summaries", 
-                           pattern = sprintf("SUMMARY_aiming%d", rot))
+    # rotfiles <- list.files(path = sprintf("data/summaries/aiming%d", rot), 
+    #                        pattern = sprintf("SUMMARY_aiming%d", rot))
     
-    responses <- matrix(NA, nrow = length(rotfiles), ncol = 120)
+    rotppids <- demographics[which(demographics$rotation == rot & 
+                                     demographics$learner),]$participant
     
-    for (rotfile_no in c(1:length(rotfiles))) {
+    responses <- matrix(NA, nrow = length(rotppids), ncol = 120)
+    
+    # for (rotfile_no in c(1:length(rotfiles))) {
+    #   
+    #   rotfile <- rotfiles[[rotfile_no]]
       
-      rotfile <- rotfiles[[rotfile_no]]
+    for (idno in c(1:length(rotppids))) {
+      
+      ppid <- rotppids[idno]
+      
+      rotfile <- sprintf("SUMMARY_aiming%d_%s.csv", rot, ppid)
       
       # ppno <- ppno + 1
       
-      ppid <- substr(strsplit(rotfile, "_")[[1]][3], 1, 6)
+      # ppid <- substr(strsplit(rotfile, "_")[[1]][3], 1, 6)
       
       # cat(sprintf('working on participant %d (%s, %d° rotation)\n', ppno, ppid, rot))
       
       # read participant data
-      data <- read.csv(sprintf("data/summaries/%s", rotfile))
+      data <- read.csv(sprintf("data/summaries/aiming%d/%s", rot, rotfile))
       
       if (signal == 'aiming') { 
         
-        responses[rotfile_no,] <- data$aimdeviation_deg[which(data$rotation_deg == -1 * rot)]
+        responses[idno,] <- data$aimdeviation_deg[which(data$rotation_deg == -1 * rot)]
         
       } else if (signal == 'adapt') {
         
-        responses[rotfile_no,] <- data$reachdeviation_deg[which(data$rotation_deg == -1 * rot)]
+        responses[idno,] <- data$reachdeviation_deg[which(data$rotation_deg == -1 * rot)]
         
       }
       
@@ -816,7 +827,7 @@ calculateModelFits <- function(n_trials = 120, bw=c('aiming'=2/3, 'adapt'=3), ou
     # and for both step and exp models applied to adaptation, the first mode always has weight 0
     # to force it to be a single normal distribution, which should have 2 parameters, not 5
 
-    # print(length(dens))
+    print(length(dens))
     
     nll_val <- nll(dens)
     AIC_val <- Reach::AIC(logLik = -1*nll_val, k = k, N=length(dens))
